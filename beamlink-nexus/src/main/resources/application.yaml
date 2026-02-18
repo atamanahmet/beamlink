@@ -1,0 +1,37 @@
+# Server Configuration
+server:
+  port: 5000
+  address: 0.0.0.0
+
+# Application
+spring:
+  application:
+    name: beamlink-nexus
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: -1         # -1 = unlimited
+      max-request-size: -1      # -1 = unlimited
+      file-size-threshold: 0
+
+# Nexus Configuration
+nexus:
+  data:
+    directory: ./data
+  approval:
+    required: true
+  name: Nexus
+  monitoring:
+    interval: 60000  # 1 minute
+  upload:
+    directory: ./received_files
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.atamanahmet.beamlink: DEBUG
+  file:
+    name: nexus.log
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
