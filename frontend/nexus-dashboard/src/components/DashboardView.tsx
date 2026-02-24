@@ -1,43 +1,45 @@
 import { useState, useEffect } from "react";
-import { LogOut, Activity, Users, Clock } from "lucide-react";
+import { Activity, Users, Clock } from "lucide-react";
 import { AgentList } from "./AgentList";
 import { PendingApprovals } from "./PendingApprovals";
 import { Statistics } from "./Statistics";
 import { TransferLogs } from "./TransferLogs";
-import { api } from "../services/api";
+import { useData } from "../context/DataContext";
 
-interface DashboardProps {
-  onLogout: () => void;
-}
+export const DashboardView = () => {
+  const { getStats } = useData();
 
-export const DashboardView = ({ onLogout }: DashboardProps) => {
   const [activeTab, setActiveTab] = useState<"agents" | "pending" | "logs">(
     "agents",
   );
   const [stats, setStats] = useState({
-    totalAgents: 0,
-    onlineAgents: 0,
-    offlineAgents: 0,
-    pendingApprovals: 0,
-    pendingRenameApprovals: 0,
-    totalTransfers: 0,
-    totalDataTransferred: 0,
+    agentStats: {
+      total: 0,
+      online: 0,
+      offline: 0,
+      pending: 0,
+      pendingRename: 0,
+    },
+    transferStats: {
+      totalTransfers: 0,
+      totalDataTransferred: 0,
+    },
   });
 
   useEffect(() => {
-    loadStats();
-    const interval = setInterval(loadStats, 5000); // Refresh every 5s
-    return () => clearInterval(interval);
-  }, []);
+    const loadStats = async () => {
+      try {
+        const data = await getStats();
+        setStats(data);
+      } catch (err) {
+        console.error("Failed to load stats:", err);
+      }
+    };
 
-  const loadStats = async () => {
-    try {
-      const response = await api.getStats();
-      setStats(response);
-    } catch (error) {
-      console.error("Failed to load stats:", error);
-    }
-  };
+    loadStats();
+    const interval = setInterval(loadStats, 5000); // refresh every 5s
+    return () => clearInterval(interval);
+  }, [getStats]);
 
   return (
     <div className="min-h-screen p-6">
@@ -50,16 +52,6 @@ export const DashboardView = ({ onLogout }: DashboardProps) => {
             </h1>
             <p className="text-orange-300/60">Central Command & Control</p>
           </div>
-
-          {/* <button
-            onClick={onLogout}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-900/30 hover:bg-orange-900/50
-                       border border-orange-700 rounded-lg text-orange-300
-                       transition-all"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </button> */}
         </div>
 
         {/* Statistics */}
@@ -97,12 +89,13 @@ export const DashboardView = ({ onLogout }: DashboardProps) => {
             >
               <Clock className="w-5 h-5" />
               Pending Approvals
-              {stats.pendingApprovals + stats.pendingRenameApprovals > 0 && (
+              {stats.agentStats.pending + stats.agentStats.pendingRename >
+                0 && (
                 <span
                   className="absolute top-2 right-2 bg-orange-500 text-black text-xs
                                  px-2 py-0.5 rounded-full font-bold"
                 >
-                  {stats.pendingApprovals + stats.pendingRenameApprovals}
+                  {stats.agentStats.pending + stats.agentStats.pendingRename}
                 </span>
               )}
             </button>
@@ -123,10 +116,8 @@ export const DashboardView = ({ onLogout }: DashboardProps) => {
 
           {/* Tab Content */}
           <div className="p-6">
-            {activeTab === "agents" && <AgentList onUpdate={loadStats} />}
-            {activeTab === "pending" && (
-              <PendingApprovals onUpdate={loadStats} />
-            )}
+            {activeTab === "agents" && <AgentList />}
+            {activeTab === "pending" && <PendingApprovals />}
             {activeTab === "logs" && <TransferLogs />}
           </div>
         </div>

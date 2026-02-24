@@ -1,11 +1,10 @@
 package com.atamanahmet.beamlink.nexus.domain;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.persistence.*;
+import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Received transfer log from all agents
@@ -14,14 +13,18 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = "transfer_logs")
+@Builder
 public class TransferLog {
+    @Id
+    private UUID id;
 
-    private String id;
-    private String fromAgentId;
+    private UUID fromAgentId;
     private String fromAgentName;
-    private String toAgentId;
+    private UUID toAgentId;
     private String toAgentName;
     private String filename;
     private long fileSize;
-    private LocalDateTime timestamp;
+    private Instant timestamp;
 }

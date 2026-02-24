@@ -1,9 +1,16 @@
 package com.atamanahmet.beamlink.nexus.controller;
 
+import com.atamanahmet.beamlink.nexus.domain.Agent;
+import com.atamanahmet.beamlink.nexus.domain.enums.AgentState;
+import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
+import com.atamanahmet.beamlink.nexus.service.AgentService;
 import com.atamanahmet.beamlink.nexus.service.FileTransferService;
+
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api")
@@ -18,21 +26,35 @@ import java.util.Map;
 public class FileController {
 
     private final Logger log = LoggerFactory.getLogger(FileController.class);
+
     private final FileTransferService fileTransferService;
+    private final AgentTokenService agentTokenService;
+    private final AgentService agentService;
 
     /**
      * Check if there's issues before uploading, preflight
+     * Extract identity from verified token
      */
     @GetMapping("/upload/check")
     public ResponseEntity<Map<String, Object>> checkDiskSpace(
             @RequestParam("fileSize") long fileSize,
-            @RequestParam("filename") String filename) {
+            @RequestParam("filename") String filename,
+            @RequestHeader("X-Auth-Token") String token) {
 
         Map<String, Object> response = new HashMap<>();
 
-        // Validate filename first
-        if (filename == null || filename.trim().isEmpty()) {
+        UUID agentId = agentTokenService.extractAgentId(token);
 
+        Agent agent = agentService.findByAgentId(agentId);
+
+        if (agent.getState() != AgentState.APPROVED) {
+
+            return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .body(response);
+        }
+
+        if (filename == null || filename.trim().isEmpty()) {
             response.put("success", false);
             response.put("error", "Invalid filename");
             response.put("message", "Filename cannot be empty");
@@ -42,9 +64,7 @@ public class FileController {
                     .body(response);
         }
 
-        // Check for dangerous characters in filename
         if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
-
             response.put("success", false);
             response.put("error", "Invalid filename");
             response.put("message", "Filename contains invalid characters");
@@ -54,19 +74,17 @@ public class FileController {
                     .body(response);
         }
 
-        // Check disk space
         boolean hasSpace = fileTransferService.checkDiskSpaceAvailable(fileSize);
 
         if (hasSpace) {
-
             response.put("success", true);
             response.put("message", "Ready to receive file");
 
             return ResponseEntity
                     .status(HttpStatus.OK)
                     .body(response);
-        } else {
 
+        } else {
             response.put("success", false);
             response.put("error", "Insufficient disk space");
             response.put("message", "Not enough disk space for this file");
@@ -79,21 +97,18 @@ public class FileController {
 
     /**
      * Upload endpoint - receives files from agents
+     * Extract identity from verified token
      */
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> upload(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "fromAgent", required = false) String fromAgentId,
-            @RequestParam(value = "fromName", required = false) String fromName) throws Exception {
+            @RequestHeader("X-Auth-Token") String token) throws Exception {
 
         Map<String, Object> response = new HashMap<>();
 
-        // Validate file exists
         if (file == null || file.isEmpty()) {
-
             response.put("success", false);
             response.put("error", "No file provided");
-            response.put("message", "Please select a file to upload");
 
             return ResponseEntity
                     .status(HttpStatus.BAD_REQUEST)
@@ -102,29 +117,43 @@ public class FileController {
 
         String filename = file.getOriginalFilename();
 
-        // Validate filename
         if (filename == null || filename.trim().isEmpty()) {
-
             response.put("success", false);
             response.put("error", "Invalid filename");
-            response.put("message", "File has no name");
+
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(response);
+        }
+        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            response.put("success", false);
+            response.put("error", "Invalid filename");
+            response.put("message", "Filename contains invalid characters");
 
             return ResponseEntity
                     .status(HttpStatus.BAD_REQUEST)
                     .body(response);
         }
 
-        // Stream from MultipartFile to disk
+        UUID agentId = agentTokenService.extractAgentId(token);
+        Agent agent = agentService.findByAgentId(agentId);
+
+        if (agent.getState() != AgentState.APPROVED) {
+
+            return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .build();
+        }
+
         long bytesWritten = fileTransferService.receiveFileStream(
                 file.getInputStream(),
                 filename,
                 file.getSize(),
-                fromAgentId,
-                fromName
+                agentId,
+                agent.getName()
         );
 
         response.put("success", true);
-        response.put("message", "File uploaded successfully");
         response.put("filename", filename);
         response.put("size", bytesWritten);
 

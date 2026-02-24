@@ -2,12 +2,17 @@ import { Users, Wifi, WifiOff, Clock, Activity, HardDrive } from "lucide-react";
 
 interface StatisticsProps {
   stats: {
-    totalAgents: number;
-    onlineAgents: number;
-    offlineAgents: number;
-    pendingApprovals: number;
-    totalTransfers: number;
-    totalDataTransferred: number;
+    agentStats: {
+      total: number;
+      online: number;
+      offline: number;
+      pending: number;
+      pendingRename: number;
+    };
+    transferStats: {
+      totalTransfers: number;
+      totalDataTransferred: number;
+    };
   };
 }
 
@@ -24,37 +29,37 @@ export const Statistics = ({ stats }: StatisticsProps) => {
     {
       icon: Users,
       label: "Total Agents",
-      value: stats.totalAgents,
+      value: stats.agentStats.total,
       color: "orange",
     },
     {
       icon: Wifi,
       label: "Online",
-      value: stats.onlineAgents,
+      value: stats.agentStats.online,
       color: "green",
     },
     {
       icon: WifiOff,
       label: "Offline",
-      value: stats.offlineAgents,
+      value: stats.agentStats.offline,
       color: "red",
     },
     {
       icon: Clock,
       label: "Pending",
-      value: stats.pendingApprovals,
+      value: stats.agentStats.pending,
       color: "red",
     },
     {
       icon: Activity,
       label: "Transfers",
-      value: stats.totalTransfers,
+      value: stats.transferStats.totalTransfers,
       color: "green",
     },
     {
       icon: HardDrive,
       label: "Data Transferred",
-      value: formatBytes(stats.totalDataTransferred),
+      value: formatBytes(stats.transferStats.totalDataTransferred),
       color: "orange",
     },
   ];
@@ -77,7 +82,9 @@ export const Statistics = ({ stats }: StatisticsProps) => {
               </div>
             </div>
             <p className="text-orange-300/60 text-xs mb-1">{stat.label}</p>
-            <p className="text-2xl font-bold text-orange-400">{stat.value}</p>
+            <p className="text-2xl font-bold text-orange-400">
+              {stat.value || 0}
+            </p>
           </div>
         );
       })}

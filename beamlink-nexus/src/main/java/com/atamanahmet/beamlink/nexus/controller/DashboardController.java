@@ -1,6 +1,6 @@
 package com.atamanahmet.beamlink.nexus.controller;
 
-import com.atamanahmet.beamlink.nexus.domain.NexusStats;
+import com.atamanahmet.beamlink.nexus.dto.NexusStats;
 import com.atamanahmet.beamlink.nexus.service.StatsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
  * Dashboard statistics
  */
 @RestController
-@RequestMapping("/api/dashboard")
+@RequestMapping("/api/nexus/dashboard")
 @RequiredArgsConstructor
 public class DashboardController {
 

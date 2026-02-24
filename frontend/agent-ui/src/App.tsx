@@ -1,35 +1,38 @@
-import { useState } from "react";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { DataProvider } from "./context/DataContext";
 import { FileUpload } from "./components/FileUpload";
 import { Login } from "./components/Login";
 import { AgentInfo } from "./components/AgentInfo";
 
-function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+const AppRoutes = () => {
+  const { isAuthenticated } = useAuth();
 
-  if (!isAuthenticated) {
-    return <Login onLogin={() => setIsAuthenticated(true)} />;
-  }
+  if (!isAuthenticated) return <Login />;
 
   return (
-    <Router>
-      <Routes>
-        <Route
-          path="/"
-          element={<FileUpload onLogout={() => setIsAuthenticated(false)} />}
-        />
-        <Route
-          path="/info"
-          element={<AgentInfo onLogout={() => setIsAuthenticated(false)} />}
-        />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </Router>
+    <Routes>
+      <Route path="/" element={<FileUpload />} />
+      <Route path="/info" element={<AgentInfo />} />
+      <Route path="*" element={<Navigate to="/" />} />
+    </Routes>
+  );
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <DataProvider>
+        <Router>
+          <AppRoutes />
+        </Router>
+      </DataProvider>
+    </AuthProvider>
   );
 }
 

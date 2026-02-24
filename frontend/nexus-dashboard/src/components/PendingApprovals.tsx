@@ -1,27 +1,32 @@
 import { useState, useEffect } from "react";
 import { Check, X, Clock } from "lucide-react";
-import { api } from "../services/api";
+import { useData } from "../context/DataContext";
 
 interface PendingAgent {
-  agentId: string;
+  id: string;
   name: string;
   ipAddress: string;
   port: number;
-  requestedAt: string;
+  registeredAt: string;
 }
 
 interface PendingRename {
-  agentId: string;
+  id: string;
   currentName: string;
   requestedName: string;
   requestedAt: string;
 }
 
-interface PendingApprovalsProps {
-  onUpdate: () => void;
-}
+export const PendingApprovals = () => {
+  const {
+    getPendingAgents,
+    getPendingRenames,
+    approveRename,
+    rejectRename,
+    approveAgent,
+    rejectAgent,
+  } = useData();
 
-export const PendingApprovals = ({ onUpdate }: PendingApprovalsProps) => {
   const [pendingAgents, setPendingAgents] = useState<PendingAgent[]>([]);
   const [pendingRenames, setPendingRenames] = useState<PendingRename[]>([]);
 
@@ -34,9 +39,11 @@ export const PendingApprovals = ({ onUpdate }: PendingApprovalsProps) => {
   const loadPending = async () => {
     try {
       const [agents, renames] = await Promise.all([
-        api.getPendingAgents(),
-        api.getPendingRenames(),
+        getPendingAgents(),
+        getPendingRenames(),
       ]);
+
+      console.log("agents", agents);
 
       setPendingAgents(agents);
       setPendingRenames(renames);
@@ -47,49 +54,59 @@ export const PendingApprovals = ({ onUpdate }: PendingApprovalsProps) => {
     }
   };
 
-  const handleApproveRename = async (agentId: string) => {
+  const handleApproveRename = async (id: string) => {
     try {
-      await api.approveRename(agentId);
-      setPendingRenames(pendingRenames.filter((r) => r.agentId !== agentId));
-      onUpdate();
+      await approveRename(id);
+      setPendingRenames(pendingRenames.filter((r) => r.id !== id));
     } catch (error) {
       console.error("Failed to approve rename:", error);
     }
   };
 
-  const handleRejectRename = async (agentId: string) => {
+  const handleRejectRename = async (id: string) => {
     try {
-      await api.rejectRename(agentId);
-      setPendingRenames(pendingRenames.filter((r) => r.agentId !== agentId));
-      onUpdate();
+      await rejectRename(id);
+      setPendingRenames(pendingRenames.filter((r) => r.id !== id));
     } catch (error) {
       console.error("Failed to reject rename:", error);
     }
   };
 
-  const handleApprove = async (agentId: string) => {
+  const handleApprove = async (id: string) => {
     try {
-      await api.approveAgent(agentId);
-      setPendingAgents(pendingAgents.filter((a) => a.agentId !== agentId));
-      onUpdate();
+      await approveAgent(id);
+      setPendingAgents(pendingAgents.filter((a) => a.id !== id));
     } catch (error) {
       console.error("Failed to approve agent:", error);
     }
   };
 
-  const handleReject = async (agentId: string) => {
+  const handleReject = async (id: string) => {
     try {
-      await api.rejectAgent(agentId);
-      setPendingAgents(pendingAgents.filter((a) => a.agentId !== agentId));
-      onUpdate();
+      await rejectAgent(id);
+      setPendingAgents(pendingAgents.filter((a) => a.id !== id));
     } catch (error) {
       console.error("Failed to reject agent:", error);
     }
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    if (!dateString) return "—";
+    const normalized = dateString.replace(/(\.\d{3})\d+/, "$1");
+    const date = new Date(normalized);
+    return (
+      date.toLocaleDateString([], {
+        day: "2-digit",
+        month: "2-digit",
+        year: "2-digit",
+      }) +
+      " " +
+      date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    );
   };
 
   if (loading) {
@@ -118,7 +135,7 @@ export const PendingApprovals = ({ onUpdate }: PendingApprovalsProps) => {
       <div className="space-y-4">
         {pendingAgents.map((agent) => (
           <div
-            key={agent.agentId}
+            key={agent.id}
             className="bg-black/40 border border-yellow-600/40 rounded-xl p-4
                        flex items-center justify-between"
           >
@@ -130,13 +147,13 @@ export const PendingApprovals = ({ onUpdate }: PendingApprovalsProps) => {
                 <p>
                   IP: {agent.ipAddress}:{agent.port}
                 </p>
-                <p>Requested: {formatDate(agent.requestedAt)}</p>
+                <p>Requested At: {formatDate(agent.registeredAt)}</p>
               </div>
             </div>
 
             <div className="flex gap-2">
               <button
-                onClick={() => handleApprove(agent.agentId)}
+                onClick={() => handleApprove(agent.id)}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500
                            text-white rounded-lg transition-all shadow-lg shadow-green-900/40"
               >
@@ -145,7 +162,7 @@ export const PendingApprovals = ({ onUpdate }: PendingApprovalsProps) => {
               </button>
 
               <button
-                onClick={() => handleReject(agent.agentId)}
+                onClick={() => handleReject(agent.id)}
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500
                            text-white rounded-lg transition-all shadow-lg shadow-red-900/40"
               >
@@ -165,7 +182,7 @@ export const PendingApprovals = ({ onUpdate }: PendingApprovalsProps) => {
             <div className="space-y-4">
               {pendingRenames.map((rename) => (
                 <div
-                  key={rename.agentId}
+                  key={rename.id}
                   className="bg-black/40 border border-blue-600/40 rounded-xl p-4
                      flex items-center justify-between"
                 >
@@ -174,14 +191,14 @@ export const PendingApprovals = ({ onUpdate }: PendingApprovalsProps) => {
                       {rename.currentName} → {rename.requestedName}
                     </h3>
                     <div className="space-y-1 text-sm text-orange-300/60">
-                      <p>Agent ID: {rename.agentId}</p>
+                      <p>Agent ID: {rename.id}</p>
                       <p>Requested: {formatDate(rename.requestedAt)}</p>
                     </div>
                   </div>
 
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleApproveRename(rename.agentId)}
+                      onClick={() => handleApproveRename(rename.id)}
                       className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500
                          text-white rounded-lg transition-all shadow-lg shadow-green-900/40"
                     >
@@ -190,7 +207,7 @@ export const PendingApprovals = ({ onUpdate }: PendingApprovalsProps) => {
                     </button>
 
                     <button
-                      onClick={() => handleRejectRename(rename.agentId)}
+                      onClick={() => handleRejectRename(rename.id)}
                       className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500
                          text-white rounded-lg transition-all shadow-lg shadow-red-900/40"
                     >

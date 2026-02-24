@@ -1,5 +1,7 @@
 package com.atamanahmet.beamlink.nexus.exception;
 
+import com.atamanahmet.beamlink.nexus.domain.Agent;
+import com.atamanahmet.beamlink.nexus.dto.AgentRegistrationResponse;
 import com.atamanahmet.beamlink.nexus.exception.FileTransferException;
 import com.atamanahmet.beamlink.nexus.exception.InsufficientDiskSpaceException;
 import com.atamanahmet.beamlink.nexus.exception.NexusOfflineException;
@@ -21,6 +23,24 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     private final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(AgentAlreadyExistsException.class)
+    public ResponseEntity<AgentRegistrationResponse> handleAgentAlreadyExists(AgentAlreadyExistsException ex) {
+
+        Agent agent = ex.getAgent();
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new AgentRegistrationResponse(agent.getId(), agent.getState()));
+    }
+    @ExceptionHandler(NameAlreadyInUseException.class)
+    public ResponseEntity<?> handleAgentAlreadyExists(NameAlreadyInUseException ex) {
+
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body("Name is already in use");
+    }
 
     @ExceptionHandler(InsufficientDiskSpaceException.class)
     public ResponseEntity<Map<String, Object>> handleInsufficientDiskSpaceException(InsufficientDiskSpaceException e) {
@@ -80,8 +100,10 @@ public class GlobalExceptionHandler {
                 .body(response);
     }
 
-    @ExceptionHandler(NexusOfflineException.class)
-    public void handleNexusOfflineException(NexusOfflineException e) {
-        log.warn("Nexus is offline. Continue with peer cache");
+    @ExceptionHandler(AgentNotFoundException.class)
+    public ResponseEntity<String> handleAgentNotFound(AgentNotFoundException e) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(e.getMessage());
     }
 }

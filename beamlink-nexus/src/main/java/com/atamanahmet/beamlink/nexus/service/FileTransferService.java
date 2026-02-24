@@ -1,7 +1,6 @@
 package com.atamanahmet.beamlink.nexus.service;
 
 import com.atamanahmet.beamlink.nexus.config.NexusConfig;
-import com.atamanahmet.beamlink.nexus.domain.TransferLog;
 import com.atamanahmet.beamlink.nexus.exception.FileTransferException;
 import com.atamanahmet.beamlink.nexus.exception.InsufficientDiskSpaceException;
 import lombok.RequiredArgsConstructor;
@@ -9,11 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedOutputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.file.*;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -21,137 +18,123 @@ public class FileTransferService {
 
     private final Logger log = LoggerFactory.getLogger(FileTransferService.class);
     private final NexusConfig config;
-    private final LogService logService;
+    private final TransferLogService transferLogService;
 
-    /**
-     * Receive file stream - DIRECT WRITE to disk as bytes arrive
-     */
+    private static final int  READ_BUFFER_SIZE  = 8192;
+    private static final int  WRITE_BUFFER_SIZE = 65536;
+    private static final long DISK_BUFFER_BYTES = 100L * 1024 * 1024;
+
     public long receiveFileStream(
             InputStream inputStream,
             String filename,
             long fileSize,
-            String fromAgentId,
-            String fromName) {
+            UUID fromAgentId,
+            String fromAgentName) {
 
-        // Validate filename (defense in depth)
         validateFilename(filename);
 
         Path uploadDir = Paths.get(config.getUploadDirectory());
-        Path filepath = uploadDir.resolve(filename);
+        Path finalPath = uploadDir.resolve(filename);
+        Path tmpPath   = uploadDir.resolve(filename + ".tmp");
 
-        // Check disk space BEFORE starting write
-        checkDiskSpace(uploadDir, fileSize);
-
-        // Ensure directory exists
+        // Directory must exist before getFileStore can inspect it
         try {
             Files.createDirectories(uploadDir);
         } catch (IOException e) {
             throw new FileTransferException("Failed to create upload directory", e);
         }
 
-        // Stream directly to disk
-        long bytesWritten = 0;
-        byte[] buffer = new byte[8192];
+        checkDiskSpace(uploadDir, fileSize);
 
-        try (BufferedOutputStream outputStream = new BufferedOutputStream(
-                new FileOutputStream(filepath.toFile()), 65536)) {
+        long bytesWritten = 0;
+        byte[] buffer = new byte[READ_BUFFER_SIZE];
+
+        try (BufferedOutputStream out = new BufferedOutputStream(
+                new FileOutputStream(tmpPath.toFile()), WRITE_BUFFER_SIZE)) {
 
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
+                out.write(buffer, 0, bytesRead);
                 bytesWritten += bytesRead;
             }
-
-            outputStream.flush();
+            out.flush();
 
         } catch (IOException e) {
-            // Clean up partial file on failure
-            try {
-                Files.deleteIfExists(filepath);
-            } catch (IOException cleanupError) {
-                log.warn("Failed to clean up partial file: {}", cleanupError.getMessage());
+            try { Files.deleteIfExists(tmpPath); }
+            catch (IOException cleanup) {
+                log.warn("Failed to clean up temp file {}: {}", tmpPath, cleanup.getMessage());
             }
-
             if (e.getMessage() != null && e.getMessage().toLowerCase().contains("no space left")) {
                 throw new InsufficientDiskSpaceException("No space left on device");
             }
             throw new FileTransferException("Failed to write file to disk", e);
         }
 
-        // Log the transfer
         try {
-            TransferLog transferLog = new TransferLog();
-            transferLog.setFromAgentId(fromAgentId != null ? fromAgentId : "unknown");
-            transferLog.setFromAgentName(fromName != null ? fromName : "Unknown");
-            transferLog.setToAgentId("nexus");
-            transferLog.setToAgentName("Nexus");
-            transferLog.setFilename(filename);
-            transferLog.setFileSize(bytesWritten);
-
-            logService.logTransfer(transferLog);
-
-            log.info("📥 File received: {} ({} bytes) from {}",
-                    filename, bytesWritten, transferLog.getFromAgentName());
-        } catch (Exception e) {
-            log.warn("Failed to log transfer, but file was saved successfully", e);
+            Files.move(tmpPath, finalPath,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            try { Files.deleteIfExists(tmpPath); }
+            catch (IOException cleanup) {
+                log.warn("Failed to clean up temp file after failed move: {}", cleanup.getMessage());
+            }
+            throw new FileTransferException("Failed to finalize file after transfer", e);
         }
 
+        try {
+            transferLogService.logTransfer(fromAgentId, fromAgentName, filename, bytesWritten);
+        } catch (Exception e) {
+            log.warn("Transfer succeeded but logging failed: {}", e.getMessage());
+        }
+
+        log.info("File received: {} ({} bytes) from {}", filename, bytesWritten, fromAgentName);
         return bytesWritten;
     }
 
-    /**
-     * Validate filename for security
-     */
-    private void validateFilename(String filename) {
-        if (filename == null || filename.trim().isEmpty()) {
-            throw new FileTransferException("Invalid filename: cannot be empty", null);
-        }
-
-        // Path traversal check
-        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
-            throw new FileTransferException("Invalid filename: contains path separators", null);
-        }
-
-        // Null byte check (security)
-        if (filename.contains("\0")) {
-            throw new FileTransferException("Invalid filename: contains null bytes", null);
-        }
-    }
-
-    /**
-     * Check if there's enough disk space for the file
-     */
-    private void checkDiskSpace(Path directory, long requiredBytes) {
-        try {
-            FileStore store = Files.getFileStore(directory);
-            long usableSpace = store.getUsableSpace();
-
-            // Require at least 100MB buffer + file size
-            long requiredSpace = requiredBytes + (100 * 1024 * 1024);
-
-            if (usableSpace < requiredSpace) {
-                throw new InsufficientDiskSpaceException(
-                        String.format("Insufficient disk space. Required: %d MB, Available: %d MB",
-                                requiredSpace / (1024 * 1024),
-                                usableSpace / (1024 * 1024))
-                );
-            }
-        } catch (IOException e) {
-            log.warn("Unable to check disk space: {}", e.getMessage());
-        }
-    }
-
-    /**
-     * Check if there's enough disk space (public method for controller)
-     */
     public boolean checkDiskSpaceAvailable(long requiredBytes) {
         try {
             Path uploadDir = Paths.get(config.getUploadDirectory());
+            Files.createDirectories(uploadDir);
             checkDiskSpace(uploadDir, requiredBytes);
             return true;
         } catch (InsufficientDiskSpaceException e) {
             log.warn("Disk space check failed: {}", e.getMessage());
             return false;
+        } catch (IOException e) {
+            log.warn("Could not verify upload directory for disk check: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private void checkDiskSpace(Path directory, long requiredBytes) {
+        try {
+            FileStore store  = Files.getFileStore(directory);
+            long usable      = store.getUsableSpace();
+            long required    = requiredBytes + DISK_BUFFER_BYTES;
+            if (usable < required) {
+                throw new InsufficientDiskSpaceException(
+                        String.format("Insufficient disk space. Required: %d MB, Available: %d MB",
+                                required / (1024 * 1024),
+                                usable   / (1024 * 1024))
+                );
+            }
+        } catch (InsufficientDiskSpaceException e) {
+            throw e;
+        } catch (IOException e) {
+            log.warn("Unable to check disk space: {}", e.getMessage());
+        }
+    }
+
+    private void validateFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            throw new FileTransferException("Invalid filename: cannot be empty", null);
+        }
+        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            throw new FileTransferException("Invalid filename: contains path separators", null);
+        }
+        if (filename.contains("\0")) {
+            throw new FileTransferException("Invalid filename: contains null bytes", null);
         }
     }
 }

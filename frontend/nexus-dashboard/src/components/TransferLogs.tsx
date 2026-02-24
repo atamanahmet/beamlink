@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Activity, ArrowRight, RefreshCw } from "lucide-react";
-import { api } from "../services/api";
 import { transferEvents } from "../services/event/event";
+import { useData } from "../context/DataContext";
 
 interface TransferLog {
   id: string;
@@ -15,6 +15,7 @@ interface TransferLog {
 }
 
 export const TransferLogs = () => {
+  const { getTransferLogs } = useData();
   const [logs, setLogs] = useState<TransferLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,9 +25,9 @@ export const TransferLogs = () => {
       setLoading(true);
       setError(null);
 
-      const data = await api.getTransferLogs();
+      const data = await getTransferLogs();
 
-      // Sort newest first (important)
+      // Sort newest first
       const sorted = [...data].sort(
         (a, b) =>
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),

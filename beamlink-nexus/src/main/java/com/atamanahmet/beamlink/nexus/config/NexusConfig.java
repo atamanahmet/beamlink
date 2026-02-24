@@ -12,4 +12,10 @@ import org.springframework.context.annotation.Configuration;
 public class NexusConfig {
     @Value("${nexus.upload.directory}")
     private String uploadDirectory;
+
+    @Value("${server.port}")
+    private int nexusPort;
+
+//    @Value("${nexus.ipAdress}")
+//    private String nexusIpAddress;
 }

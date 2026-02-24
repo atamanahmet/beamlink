@@ -1,84 +1,80 @@
 package com.atamanahmet.beamlink.nexus.controller;
 
+import com.atamanahmet.beamlink.nexus.domain.enums.AgentState;
+import com.atamanahmet.beamlink.nexus.domain.Agent;
 import com.atamanahmet.beamlink.nexus.domain.TransferLog;
-import com.atamanahmet.beamlink.nexus.service.LogService;
+import com.atamanahmet.beamlink.nexus.dto.LogSyncRequest;
+import com.atamanahmet.beamlink.nexus.service.AgentService;
+import com.atamanahmet.beamlink.nexus.service.TransferLogService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
-/**
- * Transfer log management
- */
 @RestController
-@RequestMapping("/api/logs")
+@RequestMapping("/api/nexus/logs")
 @RequiredArgsConstructor
 public class LogController {
 
-    private final LogService logService;
     private final Logger log = LoggerFactory.getLogger(LogController.class);
 
+    private final AgentService agentService;
+    private final TransferLogService transferLogService;
+
     /**
-     * Get all transfer logs
+     * Agent side, authenticated
      */
-    @GetMapping
-    public ResponseEntity<List<TransferLog>> getAllLogs() {
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .body(logService.getAllLogs());
+    @PostMapping("/sync")
+    public ResponseEntity<Map<String, Object>> syncLogs(
+            @RequestHeader("X-Auth-Token") String authToken,
+            @RequestHeader("X-Agent-Id") UUID agentId,
+            @RequestBody List<LogSyncRequest> incomingLogs) {
+
+        Agent agent = agentService.findByAgentId(agentId);
+
+        if (!authToken.equals(agent.getAuthToken())
+                || agent.getState() != AgentState.APPROVED) {
+            return ResponseEntity.status(401).build();
+        }
+
+        if (incomingLogs == null || incomingLogs.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "No logs provided"));
+        }
+
+        List<UUID> mergedIds = transferLogService.sync(agentId, incomingLogs);
+
+        log.info("Synced {} logs from agent {}", mergedIds.size(), agentId);
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "mergedLogIds", mergedIds
+        ));
     }
 
     /**
-     * Get recent logs
+     * Admin-facing — paginated.
+     */
+    @GetMapping
+    public ResponseEntity<List<TransferLog>> getLogs(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+
+        return ResponseEntity.ok(transferLogService.getLogs(PageRequest.of(page, size)));
+    }
+
+    /**
+     * Admin-facing — convenience shortcut for recent logs.
      */
     @GetMapping("/recent")
     public ResponseEntity<List<TransferLog>> getRecentLogs(
             @RequestParam(defaultValue = "50") int limit) {
 
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .body(logService.getRecentLogs(limit));
-    }
-
-    /**
-     * Receive and merge logs from agents
-     */
-    @PostMapping("/sync")
-    public ResponseEntity<Map<String, Object>> syncLogs(
-            @RequestBody List<TransferLog> agentLogs) {
-
-        Map<String, Object> response = new HashMap<>();
-
-        try {
-            List<String> mergedLogIds = logService.mergeLogs(agentLogs);
-
-            response.put("success", true);
-            response.put("message", "Logs merged successfully");
-            response.put("mergedCount", mergedLogIds.size());
-            response.put("mergedLogIds", mergedLogIds);
-
-            log.info("📋 Merged {} logs from agent", mergedLogIds.size());
-
-            return ResponseEntity
-                    .status(HttpStatus.OK)
-                    .body(response);
-
-        } catch (Exception e) {
-            log.error("Failed to merge logs", e);
-
-            response.put("success", false);
-            response.put("error", "Failed to merge logs");
-            response.put("message", e.getMessage());
-
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(response);
-        }
+        return ResponseEntity.ok(transferLogService.getRecentLogs(limit));
     }
 }

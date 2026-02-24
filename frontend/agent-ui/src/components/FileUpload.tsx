@@ -8,20 +8,21 @@ import { useNavigate } from "react-router-dom";
 import { Settings } from "lucide-react";
 
 import WarpBackground from "./WarpBackground";
+import { useAuth } from "../context/AuthContext";
 
 interface Peer {
-  id: string;
-  name: string;
-  address: string;
+  agentId: string;
+  agentName: string;
+  ipAddress: string;
+  port: number;
   online: boolean;
 }
 
-interface FileUploadProps {
-  onLogout: () => void;
-}
+export const FileUpload = () => {
+  const { apiClient, logout, publicToken } = useAuth();
 
-export const FileUpload = ({ onLogout }: FileUploadProps) => {
   const navigate = useNavigate();
+
   const [progressVisible, setProgressVisible] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState("");
@@ -61,37 +62,23 @@ export const FileUpload = ({ onLogout }: FileUploadProps) => {
     }
   }, [isUploading]);
 
+  const loadPeers = useCallback(async () => {
+    try {
+      const response = await apiClient.get("/peers");
+      const peerList = response.data || [];
+      console.log(peerList);
+      setPeers(peerList);
+    } catch (error) {
+      console.error("Failed to load peers:", error);
+      setPeers([]);
+    }
+  }, [apiClient]);
+
   useEffect(() => {
     loadPeers();
     const interval = setInterval(loadPeers, 5000);
     return () => clearInterval(interval);
-  }, []);
-
-  const loadPeers = async () => {
-    try {
-      const response = await axios.get("http://localhost:8081/api/peers");
-      let peerList = response.data || [];
-
-      const nexusPeer: Peer = {
-        id: "nexus-admin",
-        name: "Nexus (Admin PC)",
-        address: "localhost:5000",
-        online: true,
-      };
-
-      setPeers([nexusPeer, ...peerList]);
-    } catch (error) {
-      console.error("Failed to load peers:", error);
-      setPeers([
-        {
-          id: "nexus-admin",
-          name: "Nexus (Admin PC)",
-          address: "localhost:5000",
-          online: true,
-        },
-      ]);
-    }
-  };
+  }, [loadPeers]);
 
   const formatElapsedTime = (ms: number): string => {
     if (ms < 1000) {
@@ -125,53 +112,43 @@ export const FileUpload = ({ onLogout }: FileUploadProps) => {
       return;
     }
 
-    const peer = peers.find((p) => p.id === selectedPeer);
+    const peer = peers.find((p) => p.agentId === selectedPeer);
     if (!peer) {
       setMessage("Selected destination not found");
       return;
     }
 
-    // Always do pre-flight check - validates filename AND disk space
-    setMessage(`Validating upload to ${peer.name}...`);
+    const token = publicToken || "";
+
+    // Pre-flight check
+    setMessage(`Validating upload to ${peer.agentName}...`);
     try {
-      const checkResponse = await axios.get(
-        `http://${peer.address}/api/upload/check`,
+      const checkResp = await axios.get(
+        `http://${peer.ipAddress}:${peer.port}/api/upload/check`,
         {
-          params: {
-            fileSize: file.size,
-            filename: file.name,
-          },
+          params: { filename: file.name, fileSize: file.size },
+          headers: { "X-Auth-Token": token },
         },
       );
 
-      if (!checkResponse.data.success) {
-        const errorMsg =
-          checkResponse.data.message || "Upload validation failed";
-        setMessage(`❌ ${errorMsg}`);
-        alert(errorMsg); // ALERT
+      if (!checkResp.data.success) {
+        const errMsg = checkResp.data.message || "Pre-flight check failed";
+        setMessage(`❌ ${errMsg}`);
+        alert(errMsg);
         setIsUploading(false);
         return;
-      } else {
-        console.log("Pre-flight passed, proceed with upload");
       }
-    } catch (error: any) {
-      console.error("Pre-flight check failed:", error);
-
+    } catch (err: any) {
+      console.error("Pre-flight check failed:", err);
       let errorMsg = "";
 
-      // Handle specific error codes
-      if (error.response?.status === 507) {
-        errorMsg = `Insufficient disk space on ${peer.name}`;
-      } else if (error.response?.status === 400) {
-        errorMsg =
-          error.response.data?.message || "Invalid filename or request";
-      } else if (error.response?.status) {
-        errorMsg =
-          error.response.data?.message ||
-          `Pre-flight check failed: ${error.message}`;
-      } else {
-        errorMsg = `Cannot connect to ${peer.name}`;
-      }
+      if (err.response?.status === 507)
+        errorMsg = `Insufficient disk space on ${peer.agentName}`;
+      else if (err.response?.status === 400)
+        errorMsg = err.response.data?.message || "Invalid filename";
+      else if (err.response?.status)
+        errorMsg = err.response.data?.message || err.message;
+      else errorMsg = `Cannot connect to ${peer.agentName}`;
 
       setMessage(`❌ ${errorMsg}`);
       alert(errorMsg);
@@ -179,32 +156,32 @@ export const FileUpload = ({ onLogout }: FileUploadProps) => {
       return;
     }
 
-    // Pre-flight passed, proceed with upload
+    // Ready to upload
     const controller = new AbortController();
     setAbortController(controller);
     setIsUploading(true);
     setProgress(0);
     setCurrentFileIndex(index);
     setMessage(`Uploading ${file.name}... (${index + 1}/${total})`);
+    setStartTime(Date.now());
+
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    formData.append("fromName", "Agent");
 
     try {
-      setStartTime(Date.now());
-
-      const formData = new FormData();
-      formData.append("file", file, file.name); // Explicitly set filename
-      formData.append("fromName", "Agent");
-
-      const response = await axios.post(
-        `http://${peer.address}/api/upload`,
+      await axios.post(
+        `http://${peer.ipAddress}:${peer.port}/api/upload`,
         formData,
         {
           signal: controller.signal,
+          headers: { "X-Auth-Token": token },
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {
-              const percentCompleted = Math.round(
+              const percent = Math.round(
                 (progressEvent.loaded * 100) / progressEvent.total,
               );
-              setProgress(percentCompleted);
+              setProgress(percent);
               setUploadedBytes(progressEvent.loaded);
               setTotalBytes(progressEvent.total);
             }
@@ -212,10 +189,8 @@ export const FileUpload = ({ onLogout }: FileUploadProps) => {
         },
       );
 
-      console.log(response.status);
-
       setMessage(
-        `✓ ${file.name} uploaded to ${peer.name} (${index + 1}/${total})`,
+        `✓ ${file.name} uploaded to ${peer.agentName} (${index + 1}/${total})`,
       );
 
       if (index + 1 < total) {
@@ -224,30 +199,23 @@ export const FileUpload = ({ onLogout }: FileUploadProps) => {
         }, 500);
       } else {
         setMessage(
-          `✓ All ${total} files uploaded successfully to ${peer.name}!`,
+          `✓ All ${total} files uploaded successfully to ${peer.agentName}!`,
         );
         setIsUploading(false);
       }
-    } catch (error: any) {
-      console.error("Upload error:", error);
+    } catch (err: any) {
+      console.error("Upload error:", err);
 
-      // Handle cancellation
-      if (error.name === "CanceledError" || error.code === "ERR_CANCELED") {
+      if (err.name === "CanceledError" || err.code === "ERR_CANCELED") {
         setMessage(`Upload cancelled`);
-        setIsUploading(false);
-        return;
-      }
-
-      // Handle HTTP error responses
-      if (error.response) {
-        const status = error.response.status;
+      } else if (err.response) {
+        const status = err.response.status;
         const errorMessage =
-          error.response.data?.message || error.response.data?.error;
-
+          err.response.data?.message || err.response.data?.error;
         switch (status) {
           case 400:
             setMessage(
-              `❌ ${file.name} failed: ${errorMessage || "Invalid file or request"}`,
+              `❌ ${file.name} failed: ${errorMessage || "Invalid request"}`,
             );
             break;
           case 507:
@@ -262,13 +230,12 @@ export const FileUpload = ({ onLogout }: FileUploadProps) => {
             setMessage(
               `❌ ${file.name} failed: ${errorMessage || `Error ${status}`}`,
             );
+            break;
         }
-      } else if (error.request) {
-        // Request was made but no response received
-        setMessage(`❌ ${file.name} failed: Cannot reach ${peer.name}`);
+      } else if (err.request) {
+        setMessage(`❌ ${file.name} failed: Cannot reach ${peer.agentName}`);
       } else {
-        // Something else went wrong
-        setMessage(`❌ ${file.name} failed: ${error.message}`);
+        setMessage(`❌ ${file.name} failed: ${err.message}`);
       }
 
       setIsUploading(false);
@@ -276,7 +243,6 @@ export const FileUpload = ({ onLogout }: FileUploadProps) => {
       setAbortController(null);
     }
   };
-
   const handleCancel = () => {
     if (abortController) {
       abortController.abort();
@@ -307,7 +273,7 @@ export const FileUpload = ({ onLogout }: FileUploadProps) => {
   });
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#1a0f0a] via-[#3b1f12] to-black">
+    <div className="relative min-h-screen overflow-hidden bg-linear-to-br from-[#1a0f0a] via-[#3b1f12] to-black">
       <WarpBackground active={isUploading} />
 
       <div className="relative z-10 min-h-screen p-6">
@@ -329,7 +295,7 @@ export const FileUpload = ({ onLogout }: FileUploadProps) => {
               </button>
 
               <button
-                onClick={onLogout}
+                onClick={() => logout()}
                 className="flex items-center gap-2 px-4 py-2 bg-orange-900/30 hover:bg-orange-900/50
                  border border-orange-700 rounded-lg text-orange-300 transition-all"
               >
@@ -368,9 +334,9 @@ export const FileUpload = ({ onLogout }: FileUploadProps) => {
                 >
                   <option value="">Choose destination...</option>
                   {peers.map((peer) => (
-                    <option key={peer.id} value={peer.id}>
-                      {peer.name} ({peer.address}){" "}
-                      {peer.id === "nexus-admin"
+                    <option key={peer.agentId} value={peer.agentId}>
+                      {peer.agentName} ({peer.ipAddress}:{peer.port}){" "}
+                      {peer.agentName === "00000000-0000-0000-0000-000000000000"
                         ? "👑"
                         : peer.online
                           ? "🟢"

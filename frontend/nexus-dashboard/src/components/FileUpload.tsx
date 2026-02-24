@@ -1,13 +1,15 @@
 import { useCallback, useState, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import axios from "axios";
+import { useAuth } from "../context/AuthContext";
 
 import { transferEvents } from "../services/event/event";
 
 interface Peer {
   id: string;
-  name: string;
-  address: string;
+  agentName: string;
+  ipAddress: string;
+  port: number;
   online: boolean;
 }
 
@@ -16,6 +18,8 @@ interface FileUploadProps {
 }
 
 export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
+  const { apiClient } = useAuth();
+
   const [progressVisible, setProgressVisible] = useState(false);
   const [isUploading, setIsUploadingInternal] = useState(false);
   const [message, setMessage] = useState("");
@@ -73,11 +77,17 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
 
   const loadPeers = async () => {
     try {
-      const response = await axios.get("http://localhost:5000/api/peers");
+      const response = await apiClient.get("/peers");
+      // console.log(response.data);
       const peerList = response.data.peers || response.data;
       setPeers(peerList);
-    } catch (error) {
-      console.error("Failed to load peers:", error);
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        console.warn("Unauthorized. Check your admin credentials.");
+      } else {
+        console.error("Failed to load peers:", error);
+      }
+      setPeers([]);
     }
   };
 
@@ -120,10 +130,10 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
     }
 
     // Always do pre-flight check - validates filename AND disk space
-    setMessage(`Validating upload to ${peer.name}...`);
+    setMessage(`Validating upload to ${peer.agentName}...`);
     try {
       const checkResponse = await axios.get(
-        `http://${peer.address}/api/upload/check`,
+        `http://${peer.ipAddress}:${peer.port}/api/upload/check`,
         {
           params: {
             fileSize: file.size,
@@ -149,7 +159,7 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
 
       // Handle specific error codes
       if (error.response?.status === 507) {
-        errorMsg = `Insufficient disk space on ${peer.name}`;
+        errorMsg = `Insufficient disk space on ${peer.agentName}`;
       } else if (error.response?.status === 400) {
         errorMsg =
           error.response.data?.message || "Invalid filename or request";
@@ -158,7 +168,7 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
           error.response.data?.message ||
           `Pre-flight check failed: ${error.message}`;
       } else {
-        errorMsg = `Cannot connect to ${peer.name}`;
+        errorMsg = `Cannot connect to ${peer.agentName}`;
       }
 
       setMessage(`❌ ${errorMsg}`);
@@ -183,7 +193,7 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
       formData.append("fromName", "Nexus");
 
       const response = await axios.post(
-        `http://${peer.address}/api/upload`,
+        `http://${peer.ipAddress}:${peer.port}/api/upload`,
         formData,
         {
           signal: controller.signal,
@@ -203,7 +213,7 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
       console.log(response.status);
 
       setMessage(
-        `✓ ${file.name} uploaded to ${peer.name} (${index + 1}/${total})`,
+        `✓ ${file.name} uploaded to ${peer.agentName} (${index + 1}/${total})`,
       );
 
       if (index + 1 < total) {
@@ -212,7 +222,7 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
         }, 500);
       } else {
         setMessage(
-          `✓ All ${total} files uploaded successfully to ${peer.name}!`,
+          `✓ All ${total} files uploaded successfully to ${peer.agentName}!`,
         );
         setIsUploading(false);
         transferEvents.emit();
@@ -254,7 +264,7 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
         }
       } else if (error.request) {
         // Request was made but no response received
-        setMessage(`❌ ${file.name} failed: Cannot reach ${peer.name}`);
+        setMessage(`❌ ${file.name} failed: Cannot reach ${peer.agentName}`);
       } else {
         // Something else went wrong
         setMessage(`❌ ${file.name} failed: ${error.message}`);
@@ -329,7 +339,7 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
             <option value="">Choose destination agent...</option>
             {peers.map((peer) => (
               <option key={peer.id} value={peer.id}>
-                {peer.name} ({peer.address}) -{" "}
+                {peer.agentName} ({peer.ipAddress}:{peer.port}) -{" "}
                 {peer.online ? "🟢 Online" : "🔴 Offline"}
               </option>
             ))}

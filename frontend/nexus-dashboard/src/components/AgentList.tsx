@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Wifi, WifiOff, Trash2, RefreshCw, Users } from "lucide-react";
-import { api } from "../services/api";
+import { useData } from "../context/DataContext";
 
 interface Agent {
-  agentId: string;
+  id: string;
   name: string;
   ipAddress: string;
   port: number;
@@ -12,11 +12,8 @@ interface Agent {
   fileCount: number;
 }
 
-interface AgentListProps {
-  onUpdate: () => void;
-}
-
-export const AgentList = ({ onUpdate }: AgentListProps) => {
+export const AgentList = () => {
+  const { getApprovedAgents, removeAgent } = useData();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,7 +25,7 @@ export const AgentList = ({ onUpdate }: AgentListProps) => {
 
   const loadAgents = async () => {
     try {
-      const data = await api.getAgents();
+      const data = await getApprovedAgents();
       setAgents(data);
       setLoading(false);
     } catch (error) {
@@ -40,7 +37,6 @@ export const AgentList = ({ onUpdate }: AgentListProps) => {
   const handleRefresh = () => {
     setLoading(true);
     loadAgents();
-    onUpdate();
   };
 
   const formatDate = (dateString: string) => {
@@ -87,7 +83,7 @@ export const AgentList = ({ onUpdate }: AgentListProps) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {agents.map((agent) => (
           <div
-            key={agent.agentId}
+            key={agent.id}
             className="bg-black/40 border border-orange-800/30 rounded-xl p-4
                        hover:border-orange-500/40 transition-all"
           >
@@ -130,7 +126,7 @@ export const AgentList = ({ onUpdate }: AgentListProps) => {
               <button
                 className="flex items-center gap-2 text-red-400 hover:text-red-300
                            text-sm transition-colors cursor-pointer"
-                onClick={() => api.removeAgent(agent.agentId)}
+                onClick={() => removeAgent(agent.id)}
               >
                 <Trash2 className="w-4 h-4" />
                 Remove Agent

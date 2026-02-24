@@ -1,18 +1,18 @@
 import { useState } from "react";
-import { LogOut, Upload, LayoutDashboard } from "lucide-react";
+import { LogOut, Upload, LayoutDashboard, RefreshCw } from "lucide-react";
 import { FileUpload } from "./FileUpload";
 import { DashboardView } from "./DashboardView";
 import WarpBackground from "./WarpBackground";
+import { useAuth } from "../context/AuthContext";
+import { UpdateView } from "./UpdateView";
 
-interface DashboardProps {
-  onLogout: () => void;
-}
-
-export const Dashboard = ({ onLogout }: DashboardProps) => {
-  const [activeView, setActiveView] = useState<"upload" | "dashboard">(
-    "upload",
-  );
+export const Dashboard = () => {
+  const [activeView, setActiveView] = useState<
+    "upload" | "dashboard" | "update"
+  >("upload");
   const [isUploading, setIsUploading] = useState(false);
+
+  const { logout } = useAuth();
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-linear-to-br from-[#1a0f0a] via-[#3b1f12] to-black">
@@ -29,7 +29,7 @@ export const Dashboard = ({ onLogout }: DashboardProps) => {
             <div className="flex gap-4">
               <button
                 onClick={() => setActiveView("upload")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer ${
                   activeView === "upload"
                     ? "bg-orange-600 text-white"
                     : "bg-orange-900/30 border border-orange-700 text-orange-300 hover:bg-orange-900/50"
@@ -41,7 +41,7 @@ export const Dashboard = ({ onLogout }: DashboardProps) => {
 
               <button
                 onClick={() => setActiveView("dashboard")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer ${
                   activeView === "dashboard"
                     ? "bg-orange-600 text-white"
                     : "bg-orange-900/30 border border-orange-700 text-orange-300 hover:bg-orange-900/50"
@@ -50,11 +50,21 @@ export const Dashboard = ({ onLogout }: DashboardProps) => {
                 <LayoutDashboard className="w-4 h-4" />
                 Dashboard
               </button>
-
               <button
-                onClick={onLogout}
+                onClick={() => setActiveView("update")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer ${
+                  activeView === "update"
+                    ? "bg-orange-600 text-white"
+                    : "bg-orange-900/30 border border-orange-700 text-orange-300 hover:bg-orange-900/50"
+                }`}
+              >
+                <RefreshCw className="w-4 h-4" />
+                Update
+              </button>
+              <button
+                onClick={() => logout()}
                 className="flex items-center gap-2 px-4 py-2 bg-orange-900/30 hover:bg-orange-900/50
-                           border border-orange-700 rounded-lg text-orange-300 transition-all"
+                           border border-orange-700 rounded-lg text-orange-300 transition-all cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
                 Logout
@@ -63,11 +73,12 @@ export const Dashboard = ({ onLogout }: DashboardProps) => {
           </div>
 
           {/* Content */}
-          {activeView === "upload" ? (
+          {activeView === "upload" && (
             <FileUpload onUploadStateChange={setIsUploading} />
-          ) : (
-            <DashboardView onLogout={onLogout} />
           )}
+
+          {activeView === "dashboard" && <DashboardView />}
+          {activeView === "update" && <UpdateView />}
         </div>
       </div>
     </div>
