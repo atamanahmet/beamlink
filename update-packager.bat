@@ -2,10 +2,10 @@
 setlocal enabledelayedexpansion
 
 REM ── Paths ──────────────────────────────────────────────────────────
-set JAR_SOURCE=C:\Users\Foxit\Desktop\beamlink\beamlink-agent-dist\target\beamlink-agent-dist-0.0.1.jar
-set FRONTEND_DIST=C:\Users\Foxit\Desktop\beamlink\frontend\agent-ui\dist
-set CONFIG_SOURCE=C:\Users\Foxit\Desktop\beamlink\beamlink-agent-dist\src\main\resources\application.yaml
-set OUTPUT_DIR=C:\Users\Foxit\Desktop\beamlink
+set JAR_SOURCE=\beamlink\beamlink-agent\target\beamlink-agent-0.0.1.jar
+set FRONTEND_DIST=beamlink\frontend\agent-ui\dist
+set CONFIG_SOURCE=beamlink\beamlink-agent-dist\src\main\resources\application.yaml
+set OUTPUT_DIR=beamlink
 set STAGING_DIR=%OUTPUT_DIR%\update-staging
 set ZIP_OUTPUT=%OUTPUT_DIR%\update.zip
 
