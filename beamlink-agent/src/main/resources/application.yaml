@@ -1,0 +1,38 @@
+server:
+  port: 9090 ##CHANGE THIS
+  address: 0.0.0.0
+  tomcat:
+    max-http-form-post-size: -1
+    max-swallow-size: -1
+
+agent:
+  ip-address: auto ##CHANGE THIS
+  nexus:
+    url: http://192.168.1.86:5000 ##CHANGE THIS
+  name: ${New-PC}
+  upload:
+    directory: ./data/uploads
+  heartbeat:
+    interval: 30000
+  ui:
+    username: agent ##CHANGE THIS
+    password: agent ##CHANGE THIS
+    jwt-secret: auto ##AUTO GENERATED, CHANGE THIS
+
+logging:
+  file:
+    name: ./logs/agent.log
+
+# Application
+spring:
+  application:
+    name: beamlink-agent
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: -1 # -1 = unlimited
+      max-request-size: -1 # -1 = unlimited
+      file-size-threshold: 0
+  web:
+    resources:
+      static-locations: file:./static/,classpath:/static/

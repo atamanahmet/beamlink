@@ -62,6 +62,8 @@ public class TransferLogService {
                 .id(UUID.randomUUID())
                 .fromAgentId(fromAgentId)
                 .fromAgentName(fromAgentName)
+                .toAgentId(UUID.fromString("00000000-0000-0000-0000-000000000000"))
+                .toAgentName("Nexus")
                 .filename(filename)
                 .fileSize(fileSize)
                 .timestamp(Instant.now())

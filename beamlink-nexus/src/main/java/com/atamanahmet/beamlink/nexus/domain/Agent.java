@@ -10,7 +10,10 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "registered_agents")
+@Table(
+        name = "registered_agents",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"ip_address", "port"})
+)
 @Getter
 @Setter
 @NoArgsConstructor

@@ -11,6 +11,7 @@ interface Peer {
   ipAddress: string;
   port: number;
   online: boolean;
+  publicToken: string;
 }
 
 interface FileUploadProps {
@@ -19,6 +20,15 @@ interface FileUploadProps {
 
 export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
   const { apiClient } = useAuth();
+
+  const [nexusToken, setNexusToken] = useState<string>("");
+
+  useEffect(() => {
+    apiClient
+      .get("/auth/identity")
+      .then((res) => setNexusToken(res.data.publicToken))
+      .catch((err) => console.error("Failed to fetch Nexus identity:", err));
+  }, []);
 
   const [progressVisible, setProgressVisible] = useState(false);
   const [isUploading, setIsUploadingInternal] = useState(false);
@@ -129,7 +139,7 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
       return;
     }
 
-    // Always do pre-flight check - validates filename AND disk space
+    // Pre-flight check, validates filename AND disk space
     setMessage(`Validating upload to ${peer.agentName}...`);
     try {
       const checkResponse = await axios.get(
@@ -138,6 +148,9 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
           params: {
             fileSize: file.size,
             filename: file.name,
+          },
+          headers: {
+            "X-Auth-Token": peer.publicToken,
           },
         },
       );
@@ -197,6 +210,9 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
         formData,
         {
           signal: controller.signal,
+          headers: {
+            "X-Auth-Token": peer.publicToken,
+          },
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {
               const percentCompleted = Math.round(

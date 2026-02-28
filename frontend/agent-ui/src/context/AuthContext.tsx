@@ -3,9 +3,11 @@ import axios, { type AxiosInstance } from "axios";
 
 interface AuthContextType {
   isAuthenticated: boolean;
+  isLoading: boolean;
   publicToken: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshIdentity: () => Promise<void>;
   apiClient: AxiosInstance;
 }
 
@@ -20,18 +22,25 @@ const apiClient = axios.create({
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [publicToken, setPublicToken] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refreshIdentity = async () => {
+    try {
+      const response = await apiClient.get("/auth/me");
+      setPublicToken(response.data.publicToken);
+      setIsAuthenticated(!!response.data.publicToken);
+      return response.data.publicToken;
+    } catch {
+      setPublicToken(null);
+      setIsAuthenticated(false);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    apiClient
-      .get("/auth/me")
-      .then((response) => {
-        console.log(response.data);
-        setPublicToken(response.data.publicToken);
-        setIsAuthenticated(true);
-      })
-      .catch(() => {
-        setIsAuthenticated(false);
-      });
+    refreshIdentity();
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -43,8 +52,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (response.data.publicToken == null) {
         console.log("Public token null issues. Check logic");
       }
-      console.log(response.data);
-
       setPublicToken(response.data.publicToken);
       setIsAuthenticated(true);
     } catch {
@@ -60,7 +67,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, login, logout, apiClient, publicToken }}
+      value={{
+        isAuthenticated,
+        isLoading,
+        login,
+        logout,
+        apiClient,
+        publicToken,
+        refreshIdentity,
+      }}
     >
       {children}
     </AuthContext.Provider>

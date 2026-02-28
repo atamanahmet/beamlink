@@ -27,6 +27,8 @@ export const TransferLogs = () => {
 
       const data = await getTransferLogs();
 
+      console.log(data);
+
       // Sort newest first
       const sorted = [...data].sort(
         (a, b) =>

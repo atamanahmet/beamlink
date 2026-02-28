@@ -16,6 +16,7 @@ public class NexusConfig {
     @Value("${server.port}")
     private int nexusPort;
 
-//    @Value("${nexus.ipAdress}")
-//    private String nexusIpAddress;
+
+    @Value("${nexus.ip-address}")
+    private String ipAddress;
 }

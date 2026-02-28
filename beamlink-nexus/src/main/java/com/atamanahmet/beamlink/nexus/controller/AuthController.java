@@ -1,5 +1,6 @@
 package com.atamanahmet.beamlink.nexus.controller;
 
+import com.atamanahmet.beamlink.nexus.config.NexusConfig;
 import com.atamanahmet.beamlink.nexus.dto.LoginRequest;
 import com.atamanahmet.beamlink.nexus.dto.LoginResponse;
 import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
@@ -11,10 +12,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/nexus/auth")
@@ -25,6 +26,7 @@ public class AuthController {
 
 
     private final AgentTokenService agentTokenService;
+
 
     @Value("${nexus.admin.username}")
     private String adminUsername;
@@ -69,6 +71,16 @@ public class AuthController {
         cookie.setMaxAge(0); // delete it
         response.addCookie(cookie);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/identity")
+    public ResponseEntity<Map<String, Object>> getNexusIdentity() {
+
+        String token = agentTokenService.generatePublicToken(UUID.fromString("00000000-0000-0000-0000-000000000000"),"Nexus");
+
+        return ResponseEntity.ok(Map.of(
+                "publicToken", token
+        ));
     }
 }
 

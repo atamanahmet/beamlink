@@ -11,7 +11,17 @@ import { Login } from "./components/Login";
 import { AgentInfo } from "./components/AgentInfo";
 
 const AppRoutes = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#1a0f0a]">
+        <p className="text-orange-400 text-sm tracking-widest animate-pulse">
+          CONNECTING...
+        </p>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) return <Login />;
 

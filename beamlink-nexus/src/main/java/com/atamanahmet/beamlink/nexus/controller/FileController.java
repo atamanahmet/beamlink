@@ -2,6 +2,7 @@ package com.atamanahmet.beamlink.nexus.controller;
 
 import com.atamanahmet.beamlink.nexus.domain.Agent;
 import com.atamanahmet.beamlink.nexus.domain.enums.AgentState;
+import com.atamanahmet.beamlink.nexus.exception.AgentNotFoundException;
 import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
 import com.atamanahmet.beamlink.nexus.service.AgentService;
 import com.atamanahmet.beamlink.nexus.service.FileTransferService;
@@ -43,55 +44,60 @@ public class FileController {
 
         Map<String, Object> response = new HashMap<>();
 
-        UUID agentId = agentTokenService.extractAgentId(token);
+        try {
+            UUID agentId = agentTokenService.extractAgentId(token);
+            Agent agent = agentService.findByAgentId(agentId);
+            if (agent.getState() != AgentState.APPROVED) {
+                return ResponseEntity
+                        .status(HttpStatus.FORBIDDEN)
+                        .body(response);
+            }
+            if (filename == null || filename.trim().isEmpty()) {
+                response.put("success", false);
+                response.put("error", "Invalid filename");
+                response.put("message", "Filename cannot be empty");
 
-        Agent agent = agentService.findByAgentId(agentId);
+                return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body(response);
+            }
 
-        if (agent.getState() != AgentState.APPROVED) {
+            if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+                response.put("success", false);
+                response.put("error", "Invalid filename");
+                response.put("message", "Filename contains invalid characters");
 
+                return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body(response);
+            }
+
+            boolean hasSpace = fileTransferService.checkDiskSpaceAvailable(fileSize);
+
+            if (hasSpace) {
+                response.put("success", true);
+                response.put("message", "Ready to receive file");
+
+                return ResponseEntity
+                        .status(HttpStatus.OK)
+                        .body(response);
+
+            } else {
+                response.put("success", false);
+                response.put("error", "Insufficient disk space");
+                response.put("message", "Not enough disk space for this file");
+
+                return ResponseEntity
+                        .status(HttpStatus.INSUFFICIENT_STORAGE)
+                        .body(response);
+            }
+
+        } catch (AgentNotFoundException e) {
+
+            // Agent sends new registraion
             return ResponseEntity
-                    .status(HttpStatus.FORBIDDEN)
-                    .body(response);
-        }
-
-        if (filename == null || filename.trim().isEmpty()) {
-            response.put("success", false);
-            response.put("error", "Invalid filename");
-            response.put("message", "Filename cannot be empty");
-
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body(response);
-        }
-
-        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
-            response.put("success", false);
-            response.put("error", "Invalid filename");
-            response.put("message", "Filename contains invalid characters");
-
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body(response);
-        }
-
-        boolean hasSpace = fileTransferService.checkDiskSpaceAvailable(fileSize);
-
-        if (hasSpace) {
-            response.put("success", true);
-            response.put("message", "Ready to receive file");
-
-            return ResponseEntity
-                    .status(HttpStatus.OK)
-                    .body(response);
-
-        } else {
-            response.put("success", false);
-            response.put("error", "Insufficient disk space");
-            response.put("message", "Not enough disk space for this file");
-
-            return ResponseEntity
-                    .status(HttpStatus.INSUFFICIENT_STORAGE)
-                    .body(response);
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .build();
         }
     }
 
@@ -106,60 +112,64 @@ public class FileController {
 
         Map<String, Object> response = new HashMap<>();
 
-        if (file == null || file.isEmpty()) {
-            response.put("success", false);
-            response.put("error", "No file provided");
+        try {
+            UUID agentId = agentTokenService.extractAgentId(token);
+            Agent agent = agentService.findByAgentId(agentId);
+            if (agent.getState() != AgentState.APPROVED) {
+                return ResponseEntity
+                        .status(HttpStatus.FORBIDDEN)
+                        .build();
+            }
+            if (file == null || file.isEmpty()) {
+                response.put("success", false);
+                response.put("error", "No file provided");
+
+                return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body(response);
+            }
+
+            String filename = file.getOriginalFilename();
+
+            if (filename == null || filename.trim().isEmpty()) {
+                response.put("success", false);
+                response.put("error", "Invalid filename");
+
+                return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body(response);
+            }
+            if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+                response.put("success", false);
+                response.put("error", "Invalid filename");
+                response.put("message", "Filename contains invalid characters");
+
+                return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body(response);
+            }
+
+            long bytesWritten = fileTransferService.receiveFileStream(
+                    file.getInputStream(),
+                    filename,
+                    file.getSize(),
+                    agentId,
+                    agent.getName()
+            );
+
+            response.put("success", true);
+            response.put("filename", filename);
+            response.put("size", bytesWritten);
 
             return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
+                    .status(HttpStatus.OK)
                     .body(response);
+
+        } catch (AgentNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        String filename = file.getOriginalFilename();
 
-        if (filename == null || filename.trim().isEmpty()) {
-            response.put("success", false);
-            response.put("error", "Invalid filename");
-
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body(response);
-        }
-        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
-            response.put("success", false);
-            response.put("error", "Invalid filename");
-            response.put("message", "Filename contains invalid characters");
-
-            return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body(response);
-        }
-
-        UUID agentId = agentTokenService.extractAgentId(token);
-        Agent agent = agentService.findByAgentId(agentId);
-
-        if (agent.getState() != AgentState.APPROVED) {
-
-            return ResponseEntity
-                    .status(HttpStatus.FORBIDDEN)
-                    .build();
-        }
-
-        long bytesWritten = fileTransferService.receiveFileStream(
-                file.getInputStream(),
-                filename,
-                file.getSize(),
-                agentId,
-                agent.getName()
-        );
-
-        response.put("success", true);
-        response.put("filename", filename);
-        response.put("size", bytesWritten);
-
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .body(response);
     }
 
     /**

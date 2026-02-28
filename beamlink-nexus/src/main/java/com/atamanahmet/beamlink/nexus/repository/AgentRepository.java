@@ -22,6 +22,9 @@ public interface AgentRepository extends JpaRepository<Agent, UUID>{
     //agents pending rename approval
     List<Agent> findByStateAndRequestedNameIsNotNull(AgentState state);
 
+    Optional<Agent> findByAuthToken(String authToken);
+
+
     Optional<Agent> findByIpAddressAndPort(String ipAddress, int port);
 
     boolean existsByName(String agentName);

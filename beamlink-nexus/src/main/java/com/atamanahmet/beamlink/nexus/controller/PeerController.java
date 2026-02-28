@@ -42,13 +42,21 @@ public class PeerController {
      */
     @GetMapping("/online")
     public ResponseEntity<List<AgentDTO>> getOnlinePeers(
-            @RequestParam(required = false) UUID excludeAgentId,
+            @RequestParam(required = false) String excludeAgentId,
             @RequestHeader("X-Auth-Token") String token) {
+
+        UUID excludeId = null;
+
+        if (excludeAgentId != null && !excludeAgentId.equalsIgnoreCase("null")) {
+            excludeId = UUID.fromString(excludeAgentId);
+        }
 
         UUID agentId = agentTokenService.extractAgentId(token);
 
+        final UUID finalExcludeId = excludeId;
+
         List<AgentDTO> peers = agentService.getOnlineAgents().stream()
-                .filter(agent -> !agent.getId().equals(excludeAgentId))  // Don't show self
+                .filter(agent -> !agent.getId().equals(finalExcludeId))  // Don't show self
                 .map(agentService::toDTO)
                 .collect(Collectors.toList());
 
@@ -56,28 +64,6 @@ public class PeerController {
                 .status(HttpStatus.OK)
                 .body(peers);
     }
-
-//    /**
-//     * Get list of all agents (excluding requesting agent)
-//     */
-//    @GetMapping
-//    public ResponseEntity<Map<String, Object>> getAllPeers(
-//            @RequestParam(required = false) UUID excludeAgentId) {
-//
-//        List<AgentDTO> allAgents = agentService.getAllAgents().stream()
-//                .filter(agent -> !agent.getId().equals(excludeAgentId))  // Don't show self
-//                .map(agentService::toDTO)
-//                .collect(Collectors.toList());
-//
-//        Map<String, Object> response = new HashMap<>();
-//
-//        response.put("peers", allAgents);
-//        response.put("version", peerListService.getCurrentVersion());
-//
-//        return ResponseEntity
-//                .status(HttpStatus.OK)
-//                .body(response);
-//    }
 
     /**
      * Get list of all agents (excluding requesting agent)

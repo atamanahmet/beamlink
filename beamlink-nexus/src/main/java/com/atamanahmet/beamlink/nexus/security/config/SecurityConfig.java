@@ -54,7 +54,12 @@ public class SecurityConfig {
                                 "/api/agents/status",
                                 "/api/agents/identify",
                                 "/api/agents/check-approval",
-                                "/api/agents/*/exists"
+                                "/api/agents/*/exists",
+                                "/ws/agents",
+                                //TODO: fix this, controller checks public token
+                                "/api/upload/check",
+                                "/api/upload",
+                                "/api/nexus/auth/identity"
                         ).permitAll()
 
                         // Admin login

@@ -68,13 +68,11 @@ public class AgentController {
     @PostMapping("/{id}/rename")
     public ResponseEntity<Void> requestRename(
             @PathVariable UUID id,
-            @RequestParam String name) {
+            @RequestBody AgentRenameRequest request) {
 
-        agentService.requestRename(id, name);
+        agentService.requestRename(id, request.getName());
 
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .build();
+        return ResponseEntity.status(HttpStatus.OK).build();
     }
 
     /**

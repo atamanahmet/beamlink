@@ -80,17 +80,20 @@ public class AgentTokenFilter extends OncePerRequestFilter {
         UUID agentId = agentTokenService.extractAgentId(token);
 
         agentRepository.findById(agentId).ifPresent(agent -> {
-            if (agent.getState() == AgentState.APPROVED
-                    && token.equals(agent.getPublicToken())) {
+            if (agent.getState() == AgentState.APPROVED) {
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                agentId,
-                                null,
-                                List.of(new SimpleGrantedAuthority("ROLE_AGENT"))
-                        );
+                boolean isAuthToken = token.equals(agent.getAuthToken());
+                boolean isPublicToken = token.equals(agent.getPublicToken());
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                if (isAuthToken || isPublicToken) {
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    agentId,
+                                    null,
+                                    List.of(new SimpleGrantedAuthority("ROLE_AGENT"))
+                            );
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
             }
         });
     }

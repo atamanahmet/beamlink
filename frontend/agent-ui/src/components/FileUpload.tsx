@@ -16,6 +16,7 @@ interface Peer {
   ipAddress: string;
   port: number;
   online: boolean;
+  publicToken: string;
 }
 
 export const FileUpload = () => {
@@ -118,7 +119,7 @@ export const FileUpload = () => {
       return;
     }
 
-    const token = publicToken || "";
+    let token = publicToken;
 
     // Pre-flight check
     setMessage(`Validating upload to ${peer.agentName}...`);
@@ -139,20 +140,45 @@ export const FileUpload = () => {
         return;
       }
     } catch (err: any) {
-      console.error("Pre-flight check failed:", err);
-      let errorMsg = "";
+      if (err.response?.status === 401) {
+        await apiClient.get("/auth/me").then((res) => {
+          token = res.data.publicToken;
+        });
+        try {
+          const checkResp = await axios.get(
+            `http://${peer.ipAddress}:${peer.port}/api/upload/check`,
+            {
+              params: { filename: file.name, fileSize: file.size },
+              headers: { "X-Auth-Token": token },
+            },
+          );
+          if (!checkResp.data.success) {
+            const errMsg = checkResp.data.message || "Pre-flight check failed";
+            setMessage(`❌ ${errMsg}`);
+            alert(errMsg);
+            setIsUploading(false);
+            return;
+          }
+        } catch (err: any) {
+          console.error("Pre-flight check failed after info refresh:", err);
+        }
+      } else {
+        console.error("Pre-flight check failed:", err);
+        let errorMsg = "";
 
-      if (err.response?.status === 507)
-        errorMsg = `Insufficient disk space on ${peer.agentName}`;
-      else if (err.response?.status === 400)
-        errorMsg = err.response.data?.message || "Invalid filename";
-      else if (err.response?.status)
-        errorMsg = err.response.data?.message || err.message;
-      else errorMsg = `Cannot connect to ${peer.agentName}`;
+        if (err.response?.status === 507)
+          errorMsg = `Insufficient disk space on ${peer.agentName}`;
+        else if (err.response?.status === 400)
+          errorMsg = err.response.data?.message || "Invalid filename";
+        else if (err.response?.status)
+          errorMsg = err.response.data?.message || err.message;
+        else errorMsg = `Cannot connect to ${peer.agentName}`;
 
-      setMessage(`❌ ${errorMsg}`);
-      alert(errorMsg);
-      setIsUploading(false);
+        setMessage(`❌ ${errorMsg}`);
+        alert(errorMsg);
+        setIsUploading(false);
+      }
+
       return;
     }
 
@@ -204,41 +230,69 @@ export const FileUpload = () => {
         setIsUploading(false);
       }
     } catch (err: any) {
-      console.error("Upload error:", err);
-
-      if (err.name === "CanceledError" || err.code === "ERR_CANCELED") {
-        setMessage(`Upload cancelled`);
-      } else if (err.response) {
-        const status = err.response.status;
-        const errorMessage =
-          err.response.data?.message || err.response.data?.error;
-        switch (status) {
-          case 400:
-            setMessage(
-              `❌ ${file.name} failed: ${errorMessage || "Invalid request"}`,
-            );
-            break;
-          case 507:
-            setMessage(`❌ ${file.name} failed: Insufficient disk space`);
-            break;
-          case 500:
-            setMessage(
-              `❌ ${file.name} failed: Server error - ${errorMessage || "Internal error"}`,
-            );
-            break;
-          default:
-            setMessage(
-              `❌ ${file.name} failed: ${errorMessage || `Error ${status}`}`,
-            );
-            break;
+      if (err.response?.status === 401) {
+        await apiClient.get("/auth/me").then((res) => {
+          token = res.data.publicToken;
+        });
+        try {
+          await axios.post(
+            `http://${peer.ipAddress}:${peer.port}/api/upload`,
+            formData,
+            {
+              signal: controller.signal,
+              headers: { "X-Auth-Token": token },
+              onUploadProgress: (progressEvent) => {
+                if (progressEvent.total) {
+                  const percent = Math.round(
+                    (progressEvent.loaded * 100) / progressEvent.total,
+                  );
+                  setProgress(percent);
+                  setUploadedBytes(progressEvent.loaded);
+                  setTotalBytes(progressEvent.total);
+                }
+              },
+            },
+          );
+        } catch (err: any) {
+          console.error("Upload failed after info refresh:", err);
         }
-      } else if (err.request) {
-        setMessage(`❌ ${file.name} failed: Cannot reach ${peer.agentName}`);
       } else {
-        setMessage(`❌ ${file.name} failed: ${err.message}`);
-      }
+        console.error("Upload error:", err);
 
-      setIsUploading(false);
+        if (err.name === "CanceledError" || err.code === "ERR_CANCELED") {
+          setMessage(`Upload cancelled`);
+        } else if (err.response) {
+          const status = err.response.status;
+          const errorMessage =
+            err.response.data?.message || err.response.data?.error;
+          switch (status) {
+            case 400:
+              setMessage(
+                `❌ ${file.name} failed: ${errorMessage || "Invalid request"}`,
+              );
+              break;
+            case 507:
+              setMessage(`❌ ${file.name} failed: Insufficient disk space`);
+              break;
+            case 500:
+              setMessage(
+                `❌ ${file.name} failed: Server error - ${errorMessage || "Internal error"}`,
+              );
+              break;
+            default:
+              setMessage(
+                `❌ ${file.name} failed: ${errorMessage || `Error ${status}`}`,
+              );
+              break;
+          }
+        } else if (err.request) {
+          setMessage(`❌ ${file.name} failed: Cannot reach ${peer.agentName}`);
+        } else {
+          setMessage(`❌ ${file.name} failed: ${err.message}`);
+        }
+
+        setIsUploading(false);
+      }
     } finally {
       setAbortController(null);
     }

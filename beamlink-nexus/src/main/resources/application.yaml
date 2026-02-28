@@ -1,6 +1,6 @@
 # Server Configuration
 server:
-  port: 5000
+  port: 5000 ##CHANGETHIS
   address: 0.0.0.0
 
 # Application
@@ -10,21 +10,40 @@ spring:
   servlet:
     multipart:
       enabled: true
-      max-file-size: -1         # -1 = unlimited
-      max-request-size: -1      # -1 = unlimited
+      max-file-size: -1 # -1 = unlimited
+      max-request-size: -1 # -1 = unlimited
       file-size-threshold: 0
+  datasource:
+    url: jdbc:postgresql://localhost:5432/beamlink_db ##CHANGE THIS
+    username: beamlink_admin ##CHANGE THIS
+    password: admin ##CHANGE THIS
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
 
 # Nexus Configuration
 nexus:
   data:
     directory: ./data
+  update:
+    storage-path: ./update-package
   approval:
     required: true
-  name: Nexus
+  name: Nexus ##CHANGE THIS
   monitoring:
-    interval: 60000  # 1 minute
+    interval: 60000 # 1 minute
   upload:
     directory: ./received_files
+  jwt:
+    secret: auto ##CHANGE THIS
+  cors:
+    static-origins: http://localhost:5173
+  admin:
+    username: admin ##CHANGE THIS
+    password: admin ##CHANGE THIS
+  ip-address: auto ##CHANGE THIS TO LOCAL NETWORK IP
 
 # Logging
 logging:

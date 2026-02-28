@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,26 +45,36 @@ public class AgentService {
      */
     @Transactional
     public AgentRegistrationResponse register(AgentRegistrationRequest request) {
-
         Optional<Agent> existing = agentRepository.findByIpAddressAndPort(request.getIpAddress(), request.getPort());
         if (existing.isPresent()) {
             log.info("Agent already registered: {}. Returning existing record.", existing.get().getId());
-            return new AgentRegistrationResponse(existing.get().getId(), existing.get().getState());
+            return new AgentRegistrationResponse(existing.get().getId(), existing.get().getState(), existing.get().getAuthToken(), existing.get().getPublicToken());
         }
 
-        Agent agent = Agent.builder()
-                .name(request.getIpAddress()+":"+request.getPort())
-                .ipAddress(request.getIpAddress())
-                .port(request.getPort())
-                .state(AgentState.PENDING_APPROVAL)
-                .registeredAt(Instant.now())
-                .lastSeenAt(Instant.now())
-                .build();
+        try {
+            String agentName = (request.getAgentName() != null && !request.getAgentName().isBlank())
+                    ? request.getAgentName()
+                    : request.getIpAddress() + ":" + request.getPort();
 
-        Agent saved = agentRepository.save(agent);
-        log.info("New agent registered: {} awaiting admin approval.", saved.getId());
+            Agent agent = Agent.builder()
+                    .name(agentName)
+                    .ipAddress(request.getIpAddress())
+                    .port(request.getPort())
+                    .state(AgentState.PENDING_APPROVAL)
+                    .registeredAt(Instant.now())
+                    .lastSeenAt(Instant.now())
+                    .build();
 
-        return new AgentRegistrationResponse(saved.getId(), saved.getState());
+            Agent saved = agentRepository.save(agent);
+            log.info("New agent registered: {} awaiting admin approval.", saved.getId());
+            return new AgentRegistrationResponse(saved.getId(), saved.getState(), null, null);
+
+        } catch (DataIntegrityViolationException e) {
+            Agent existingAgent = agentRepository.findByIpAddressAndPort(request.getIpAddress(), request.getPort())
+                    .orElseThrow(() -> new IllegalStateException("Agent disappeared after constraint violation"));
+            log.info("Race condition on register, returning existing agent: {}", existingAgent.getId());
+            return new AgentRegistrationResponse(existingAgent.getId(), existingAgent.getState(), existingAgent.getAuthToken(), existingAgent.getPublicToken());
+        }
     }
 
     public Agent saveAgent(Agent agent){
@@ -78,13 +89,13 @@ public class AgentService {
 
 
     /**
-     * This update is received from agent itself
-     * Ip-port changes and online status
+     * This update request is received from agent itself
+     * Ip-port changes etc
      */
     @Transactional
     public AgentStatusResponse updateAgentStatus(AgentStatusRequest request) {
 
-        System.out.println("Update agent requested:");
+        log.info("Update agent requested: {}", request.getAgentId());
 
         Agent agent = agentRepository.findById(request.getAgentId())
                 .orElseThrow(() -> new AgentNotFoundException("Unknown agent: " + request.getAgentId()));
@@ -99,9 +110,9 @@ public class AgentService {
 
         agent.setLastSeenAt(Instant.now());
 
-        Agent savedagent = agentRepository.save(agent);
+        Agent savedAgent = agentRepository.save(agent);
 
-        System.out.println("Saved agent ");
+        log.debug("Agent saved: {}", savedAgent.getId());
 
         if (addressChanged && agent.getState() == AgentState.APPROVED) {
             peerListService.incrementVersion();
@@ -113,7 +124,6 @@ public class AgentService {
         List<AgentDTO> peers = null;
 
         if (peerOutdated && agent.getState() == AgentState.APPROVED) {
-
             peers = agentRepository.findByState(AgentState.APPROVED).stream()
                     .map(this::toDTO)
                     .collect(Collectors.toList());
@@ -289,12 +299,13 @@ public class AgentService {
         }
 
         agent.setName(agent.getRequestedName());
-
         agent.setRequestedName(null);
 
-        agentRepository.save(agent);
+        Agent savedAgent = agentRepository.save(agent);
 
         peerListService.incrementVersion();
+
+        agentPushService.pushRename(savedAgent);
 
         log.info("Rename approved for agent {}", agentId);
     }
@@ -320,32 +331,21 @@ public class AgentService {
         Instant now = Instant.now();
         Instant threshold = now.minus(Duration.ofMinutes(2));
         Instant lastSeen = agent.getLastSeenAt();
-        boolean agentonline = agent.isOnline();
+
+        boolean agentOnline = agent.isOnline();
 
         boolean online = false;
-        long diffSeconds = -1;
 
         if (lastSeen != null) {
-            diffSeconds = Duration.between(lastSeen, now).getSeconds();
             online = lastSeen.isAfter(threshold);
         }
-
-        System.out.println("----- AGENT DEBUG -----");
-        System.out.println("Agent ID: " + agent.getId());
-        System.out.println("Now: " + now);
-        System.out.println("LastSeenAt: " + lastSeen);
-        System.out.println("Threshold: " + threshold);
-        System.out.println("Seconds since lastSeen: " + diffSeconds);
-        System.out.println("Computed ONLINE: " + online);
-        System.out.println("Agent side online check: " + agentonline);
-        System.out.println("-----------------------");
 
         return AgentDTO.builder()
                 .id(agent.getId())
                 .agentName(agent.getName())
                 .ipAddress(agent.getIpAddress())
                 .port(agent.getPort())
-                .online(agent.isOnline())
+                .online(online)
                 .publicToken(agent.getPublicToken())
                 .build();
     }

@@ -31,7 +31,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
-                .body(new AgentRegistrationResponse(agent.getId(), agent.getState()));
+                .body(new AgentRegistrationResponse(agent.getId(), agent.getState(), agent.getAuthToken(), agent.getPublicToken()));
     }
     @ExceptionHandler(NameAlreadyInUseException.class)
     public ResponseEntity<?> handleAgentAlreadyExists(NameAlreadyInUseException ex) {

@@ -36,9 +36,9 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
   const getPendingRenamesFn = async () =>
     (await apiClient.get("/agents/rename-pending")).data;
   const approveRenameFn = async (id: string) =>
-    (await apiClient.post(`/agents/${id}/approve-rename`)).data;
+    (await apiClient.post(`/agents/${id}/rename/approve`)).data;
   const rejectRenameFn = async (id: string) =>
-    (await apiClient.post(`/agents/${id}/reject-rename`)).data;
+    (await apiClient.post(`/agents/${id}/rename/reject`)).data;
   const getTransferLogsFn = async () => (await apiClient.get("/logs")).data;
   const getRecentTransferLogsFn = async (limit = 50) =>
     (await apiClient.get(`/logs/recent?limit=${limit}`)).data;
