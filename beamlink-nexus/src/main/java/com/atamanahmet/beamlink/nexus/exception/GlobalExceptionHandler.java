@@ -2,9 +2,6 @@ package com.atamanahmet.beamlink.nexus.exception;
 
 import com.atamanahmet.beamlink.nexus.domain.Agent;
 import com.atamanahmet.beamlink.nexus.dto.AgentRegistrationResponse;
-import com.atamanahmet.beamlink.nexus.exception.FileTransferException;
-import com.atamanahmet.beamlink.nexus.exception.InsufficientDiskSpaceException;
-import com.atamanahmet.beamlink.nexus.exception.NexusOfflineException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,11 +28,12 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
-                .body(new AgentRegistrationResponse(agent.getId(), agent.getState(), agent.getAuthToken(), agent.getPublicToken()));
+                .body(new AgentRegistrationResponse(agent.getId(), agent.getState(), agent.getAuthToken(),
+                        agent.getPublicToken()));
     }
+
     @ExceptionHandler(NameAlreadyInUseException.class)
     public ResponseEntity<?> handleAgentAlreadyExists(NameAlreadyInUseException ex) {
-
 
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)

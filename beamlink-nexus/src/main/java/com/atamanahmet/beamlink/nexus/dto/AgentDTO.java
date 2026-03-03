@@ -1,13 +1,8 @@
 package com.atamanahmet.beamlink.nexus.dto;
 
-import com.atamanahmet.beamlink.nexus.domain.enums.AgentState;
-import jakarta.persistence.Column;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import lombok.*;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @AllArgsConstructor

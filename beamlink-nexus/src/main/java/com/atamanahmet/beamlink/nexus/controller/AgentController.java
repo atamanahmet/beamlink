@@ -1,7 +1,12 @@
 package com.atamanahmet.beamlink.nexus.controller;
 
-import com.atamanahmet.beamlink.nexus.dto.*;
 import com.atamanahmet.beamlink.nexus.service.AgentService;
+import com.atamanahmet.beamlink.nexus.dto.AgentIdentityResponse;
+import com.atamanahmet.beamlink.nexus.dto.AgentRegistrationRequest;
+import com.atamanahmet.beamlink.nexus.dto.AgentRegistrationResponse;
+import com.atamanahmet.beamlink.nexus.dto.AgentRenameRequest;
+import com.atamanahmet.beamlink.nexus.dto.AgentStatusRequest;
+import com.atamanahmet.beamlink.nexus.dto.AgentStatusResponse;
 import com.atamanahmet.beamlink.nexus.security.DynamicCorsRegistry;
 
 import lombok.RequiredArgsConstructor;
@@ -23,91 +28,91 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AgentController {
 
-    private final Logger log = LoggerFactory.getLogger(AgentController.class);
+        private final Logger log = LoggerFactory.getLogger(AgentController.class);
 
-    private final AgentService agentService;
-    private final DynamicCorsRegistry corsRegistry;
+        private final AgentService agentService;
+        private final DynamicCorsRegistry corsRegistry;
 
-    /**
-     * Agent registration
-     */
-    @PostMapping("/register")
-    public ResponseEntity<AgentRegistrationResponse> register(
-            @RequestBody AgentRegistrationRequest request) {
+        /**
+         * Agent registration
+         */
+        @PostMapping("/register")
+        public ResponseEntity<AgentRegistrationResponse> register(
+                        @RequestBody AgentRegistrationRequest request) {
 
-        log.info("Agent register request: {}:{}",
-                request.getIpAddress(),
-                request.getPort());
+                log.info("Agent register request: {}:{}",
+                                request.getIpAddress(),
+                                request.getPort());
 
-        corsRegistry.register("http://" + request.getIpAddress() + ":" + request.getPort());
+                corsRegistry.register("http://" + request.getIpAddress() + ":" + request.getPort());
 
-        AgentRegistrationResponse response = agentService.register(request);
+                AgentRegistrationResponse response = agentService.register(request);
 
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .body(response);
-    }
+                return ResponseEntity
+                                .status(HttpStatus.OK)
+                                .body(response);
+        }
 
-    /**
-     * Agent heartbeat / status update
-     */
-    @PostMapping("/status")
-    public ResponseEntity<AgentStatusResponse> updateStatus(
-            @RequestBody AgentStatusRequest request) {
+        /**
+         * Agent heartbeat / status update
+         */
+        @PostMapping("/status")
+        public ResponseEntity<AgentStatusResponse> updateStatus(
+                        @RequestBody AgentStatusRequest request) {
 
-        AgentStatusResponse response = agentService.updateAgentStatus(request);
+                AgentStatusResponse response = agentService.updateAgentStatus(request);
 
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .body(response);
-    }
+                return ResponseEntity
+                                .status(HttpStatus.OK)
+                                .body(response);
+        }
 
-    /**
-     * Agent rename request
-     */
-    @PostMapping("/{id}/rename")
-    public ResponseEntity<Void> requestRename(
-            @PathVariable UUID id,
-            @RequestBody AgentRenameRequest request) {
+        /**
+         * Agent rename request
+         */
+        @PostMapping("/{id}/rename")
+        public ResponseEntity<Void> requestRename(
+                        @PathVariable UUID id,
+                        @RequestBody AgentRenameRequest request) {
 
-        agentService.requestRename(id, request.getName());
+                agentService.requestRename(id, request.getName());
 
-        return ResponseEntity.status(HttpStatus.OK).build();
-    }
+                return ResponseEntity.status(HttpStatus.OK).build();
+        }
 
-    /**
-     * Placeholder fix.
-     * In case of db reset sends response to reregister
-     */
-    @GetMapping("/{id}/exists")
-    public ResponseEntity<Void> exists(@PathVariable UUID id) {
-        agentService.findByAgentId(id); // throws AgentNotFoundException if missing
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .build();
-    }
+        /**
+         * Placeholder fix.
+         * In case of db reset sends response to reregister
+         */
+        @GetMapping("/{id}/exists")
+        public ResponseEntity<Void> exists(@PathVariable UUID id) {
+                agentService.findByAgentId(id); // throws AgentNotFoundException if missing
+                return ResponseEntity
+                                .status(HttpStatus.OK)
+                                .build();
+        }
 
-    @GetMapping("/ping")
-    public ResponseEntity<Void> ping() {
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .build();
-    }
+        @GetMapping("/ping")
+        public ResponseEntity<Void> ping() {
+                return ResponseEntity
+                                .status(HttpStatus.OK)
+                                .build();
+        }
 
-    // AgentController
-    @GetMapping("/identify")
-    public ResponseEntity<AgentIdentityResponse> identify(
-            @RequestParam String ipAddress,
-            @RequestParam int port) {
+        // AgentController
+        @GetMapping("/identify")
+        public ResponseEntity<AgentIdentityResponse> identify(
+                        @RequestParam String ipAddress,
+                        @RequestParam int port) {
 
-        return agentService.getByIpAddressAndPort(ipAddress, port)
-                .map(agent -> ResponseEntity.ok(AgentIdentityResponse.builder()
-                        .agentId(agent.getId())
-                        .agentName(agent.getName())
-                        .authToken(agent.getAuthToken())
-                        .publicToken(agent.getPublicToken())
-                        .state(agent.getState())
-                        .build()))
-                .orElse(ResponseEntity.notFound().build());
-    }
+                return agentService.getByIpAddressAndPort(ipAddress, port)
+                                .map(agent -> ResponseEntity.ok(AgentIdentityResponse.builder()
+                                                .agentId(agent.getId())
+                                                .agentName(agent.getName())
+                                                .authToken(agent.getAuthToken())
+                                                .publicToken(agent.getPublicToken())
+                                                .state(agent.getState())
+                                                .build()))
+                                .orElse(ResponseEntity.notFound().build());
+        }
 }

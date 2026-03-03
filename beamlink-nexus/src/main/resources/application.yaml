@@ -1,29 +1,26 @@
-# Server Configuration
 server:
-  port: 5000 ##CHANGETHIS
+  port: ${NEXUS_PORT:7472}
   address: 0.0.0.0
 
-# Application
 spring:
   application:
     name: beamlink-nexus
   servlet:
     multipart:
-      enabled: true
-      max-file-size: -1 # -1 = unlimited
-      max-request-size: -1 # -1 = unlimited
-      file-size-threshold: 0
+      enabled: ${MULTIPART_ENABLED:true}
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE}
+      file-size-threshold: ${MULTIPART_FILE_SIZE_THRESHOLD}
   datasource:
-    url: jdbc:postgresql://localhost:5432/beamlink_db ##CHANGE THIS
-    username: beamlink_admin ##CHANGE THIS
-    password: admin ##CHANGE THIS
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     database-platform: org.hibernate.dialect.PostgreSQLDialect
 
-# Nexus Configuration
 nexus:
   data:
     directory: ./data
@@ -31,25 +28,24 @@ nexus:
     storage-path: ./update-package
   approval:
     required: true
-  name: Nexus ##CHANGE THIS
+  name: ${NEXUS_NAME}
   monitoring:
-    interval: 60000 # 1 minute
+    interval: 60000
   upload:
     directory: ./received_files
   jwt:
-    secret: auto ##CHANGE THIS
+    secret: ${NEXUS_JWT_SECRET}
   cors:
     static-origins: http://localhost:5173
   admin:
-    username: admin ##CHANGE THIS
-    password: admin ##CHANGE THIS
-  ip-address: auto ##CHANGE THIS TO LOCAL NETWORK IP
+    username: ${NEXUS_ADMIN_USERNAME}
+    password: ${NEXUS_ADMIN_PASSWORD}
+  ip-address: ${NEXUS_IP}
 
-# Logging
 logging:
   level:
     root: INFO
-    com.atamanahmet.beamlink: DEBUG
+    com.atamanahmet.beamlink: INFO
   file:
     name: nexus.log
   pattern:

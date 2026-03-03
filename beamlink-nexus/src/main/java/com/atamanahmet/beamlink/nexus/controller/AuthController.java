@@ -1,18 +1,25 @@
 package com.atamanahmet.beamlink.nexus.controller;
 
-import com.atamanahmet.beamlink.nexus.config.NexusConfig;
 import com.atamanahmet.beamlink.nexus.dto.LoginRequest;
-import com.atamanahmet.beamlink.nexus.dto.LoginResponse;
 import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
+
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
+
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.springframework.beans.factory.annotation.Value;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 import java.util.UUID;
@@ -24,9 +31,7 @@ public class AuthController {
 
     private final Logger log = LoggerFactory.getLogger(AuthController.class);
 
-
     private final AgentTokenService agentTokenService;
-
 
     @Value("${nexus.admin.username}")
     private String adminUsername;
@@ -49,7 +54,7 @@ public class AuthController {
 
         String token = agentTokenService.generateAdminToken(request.username());
 
-        //TODO: set secure https
+        // TODO: set secure https
         Cookie cookie = new Cookie("nexus_token", token);
         cookie.setHttpOnly(true);
         cookie.setSecure(false);
@@ -76,11 +81,10 @@ public class AuthController {
     @GetMapping("/identity")
     public ResponseEntity<Map<String, Object>> getNexusIdentity() {
 
-        String token = agentTokenService.generatePublicToken(UUID.fromString("00000000-0000-0000-0000-000000000000"),"Nexus");
+        String token = agentTokenService.generatePublicToken(UUID.fromString("00000000-0000-0000-0000-000000000000"),
+                "Nexus");
 
         return ResponseEntity.ok(Map.of(
-                "publicToken", token
-        ));
+                "publicToken", token));
     }
 }
-

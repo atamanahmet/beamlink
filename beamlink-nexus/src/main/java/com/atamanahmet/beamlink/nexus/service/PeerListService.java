@@ -7,8 +7,6 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-
 @Service
 @RequiredArgsConstructor
 public class PeerListService {
@@ -16,7 +14,6 @@ public class PeerListService {
     private final PeerListVersionRepository peerListVersionRepository;
 
     private PeerListVersion version;
-
 
     @PostConstruct
     @Transactional
@@ -44,9 +41,7 @@ public class PeerListService {
         return version.getVersion();
     }
 
-
     public boolean isPeerListOutdated(long clientVersion) {
         return clientVersion < getCurrentVersion();
     }
 }
-

@@ -28,6 +28,8 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
       .get("/auth/identity")
       .then((res) => setNexusToken(res.data.publicToken))
       .catch((err) => console.error("Failed to fetch Nexus identity:", err));
+    // TODO:
+    nexusToken;
   }, []);
 
   const [progressVisible, setProgressVisible] = useState(false);

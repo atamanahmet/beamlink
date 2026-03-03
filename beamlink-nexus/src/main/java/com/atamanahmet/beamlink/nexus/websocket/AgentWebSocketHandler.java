@@ -7,7 +7,6 @@ import com.atamanahmet.beamlink.nexus.dto.LogSyncRequest;
 import com.atamanahmet.beamlink.nexus.dto.StatusUpdatePayload;
 import com.atamanahmet.beamlink.nexus.dto.WebSocketMessageDTO;
 import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
-import com.atamanahmet.beamlink.nexus.service.AgentService;
 import com.atamanahmet.beamlink.nexus.service.AgentSessionService;
 import com.atamanahmet.beamlink.nexus.service.PeerListService;
 import com.atamanahmet.beamlink.nexus.service.TransferLogService;
@@ -56,13 +55,12 @@ public class AgentWebSocketHandler implements WebSocketHandler {
     public void handleMessage(WebSocketSession session, WebSocketMessage<?> message) throws Exception {
         WebSocketMessageDTO<JsonNode> envelope = objectMapper.readValue(
                 message.getPayload().toString(),
-                objectMapper.getTypeFactory().constructParametricType(WebSocketMessageDTO.class, JsonNode.class)
-        );
+                objectMapper.getTypeFactory().constructParametricType(WebSocketMessageDTO.class, JsonNode.class));
 
         switch (envelope.getType()) {
             case "status_update" -> handleStatusUpdate(session,
                     objectMapper.treeToValue(envelope.getPayload(), StatusUpdatePayload.class));
-            case "peer_update"   -> handlePeerUpdate(session,
+            case "peer_update" -> handlePeerUpdate(session,
                     objectMapper.treeToValue(envelope.getPayload(),
                             objectMapper.getTypeFactory().constructCollectionType(List.class, AgentDTO.class)));
             case "log_sync" -> handleLogSync(session,
@@ -139,7 +137,7 @@ public class AgentWebSocketHandler implements WebSocketHandler {
     /**
      * Excludes agents own ip
      * Adds nexus as a peer
-     * */
+     */
     private void pushPeerUpdate(WebSocketSession session, UUID agentId) {
         try {
             List<AgentDTO> peers = new ArrayList<>();
@@ -207,9 +205,10 @@ public class AgentWebSocketHandler implements WebSocketHandler {
         return (attr instanceof UUID) ? (UUID) attr : null;
     }
 
-    //TODO: move to peerlistservice
+    // TODO: move to peerlistservice
     private AgentDTO buildNexusPeer() {
-        String token = agentTokenService.generatePublicToken(UUID.fromString("00000000-0000-0000-0000-000000000000"),"Nexus");
+        String token = agentTokenService.generatePublicToken(UUID.fromString("00000000-0000-0000-0000-000000000000"),
+                "Nexus");
 
         return AgentDTO.builder()
                 .id(UUID.fromString("00000000-0000-0000-0000-000000000000"))

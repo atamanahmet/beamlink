@@ -23,9 +23,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
-/**
- * Security configuration - disabled for now
- */
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -56,10 +53,16 @@ public class SecurityConfig {
                                 "/api/agents/check-approval",
                                 "/api/agents/*/exists",
                                 "/ws/agents",
-                                //TODO: fix this, controller checks public token
                                 "/api/upload/check",
                                 "/api/upload",
-                                "/api/nexus/auth/identity"
+                                "/api/nexus/auth/identity",
+                                "/",
+                                "/index.html",
+                                "/assets/**",
+                                "/*.js",
+                                "/*.css",
+                                "/*.svg",
+                                "/vite.svg"
                         ).permitAll()
 
                         // Admin login

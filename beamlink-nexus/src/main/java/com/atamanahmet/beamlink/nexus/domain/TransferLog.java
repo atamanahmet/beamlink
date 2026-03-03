@@ -26,5 +26,7 @@ public class TransferLog {
     private String toAgentName;
     private String filename;
     private long fileSize;
+
+    @Column(name = "transferred_at")
     private Instant timestamp;
 }

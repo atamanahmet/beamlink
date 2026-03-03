@@ -10,13 +10,16 @@ public class BeamlinkNexusApplication {
 
     public static void main(String[] args) {
 
-        SpringApplication.run(BeamlinkNexusApplication.class, args);
+        var ctx = SpringApplication.run(BeamlinkNexusApplication.class, args);
+
+        String port = ctx.getEnvironment().getProperty("server.port");
+        String ipAddress = ctx.getEnvironment().getProperty("nexus.ip-address");
+
         System.out.println("==================================");
         System.out.println("🌐 BEAMLINK NEXUS STARTED");
         System.out.println("==================================");
-        System.out.println("Dashboard: http://localhost:5000");
-        System.out.println("API: http://localhost:5000/api");
+        System.out.println("Dashboard: http://" + ipAddress + ":" + port);
+        System.out.println("API: http://" + ipAddress + ":" + port);
         System.out.println("==================================");
     }
-
 }

@@ -1,7 +1,5 @@
 package com.atamanahmet.beamlink.nexus.domain;
 
-import com.atamanahmet.beamlink.nexus.repository.PeerListVersionRepository;
-import jakarta.annotation.PostConstruct;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -20,9 +18,6 @@ public class PeerListVersion {
         @GeneratedValue(strategy = GenerationType.IDENTITY)
         private Long id;
 
-        private Long version =1L;
-
-
-
+        private Long version = 1L;
 
 }

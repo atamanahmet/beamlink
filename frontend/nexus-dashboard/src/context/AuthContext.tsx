@@ -12,7 +12,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Single shared client with httponly cookie
 const apiClient = axios.create({
-  baseURL: "http://localhost:5000/api/nexus",
+  baseURL: `${window.location.origin}/api/nexus`,
   timeout: 10000,
   withCredentials: true,
 });

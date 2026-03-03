@@ -10,10 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(
-        name = "registered_agents",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"ip_address", "port"})
-)
+@Table(name = "registered_agents", uniqueConstraints = @UniqueConstraint(columnNames = { "ip_address", "port" }))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -53,12 +50,15 @@ public class Agent {
     private Instant lastSeenAt;
 
     @Column(nullable = false)
+    @Builder.Default
     private boolean approvalPushed = false;
 
+    @Builder.Default
     private List<String> extraOrigins = null;
 
     public boolean isOnline() {
-        if (lastSeenAt == null) return false;
+        if (lastSeenAt == null)
+            return false;
         return lastSeenAt.isAfter(Instant.now().minus(Duration.ofMinutes(2)));
     }
 }

@@ -1,16 +1,19 @@
 package com.atamanahmet.beamlink.nexus.service;
 
-import com.atamanahmet.beamlink.nexus.domain.Agent;
 import com.atamanahmet.beamlink.nexus.domain.TransferLog;
 import com.atamanahmet.beamlink.nexus.dto.LogSyncRequest;
 import com.atamanahmet.beamlink.nexus.dto.TransferStats;
 import com.atamanahmet.beamlink.nexus.repository.TransferLogRepository;
+
 import lombok.RequiredArgsConstructor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -77,8 +80,7 @@ public class TransferLogService {
         Pageable sorted = PageRequest.of(
                 pageable.getPageNumber(),
                 pageable.getPageSize(),
-                Sort.by(Sort.Direction.DESC, "timestamp")
-        );
+                Sort.by(Sort.Direction.DESC, "timestamp"));
 
         return transferLogRepository.findAll(sorted).getContent();
     }
@@ -97,7 +99,6 @@ public class TransferLogService {
 
         return new TransferStats(
                 totalTransfers,
-                totalDataTransferred
-        );
+                totalDataTransferred);
     }
 }

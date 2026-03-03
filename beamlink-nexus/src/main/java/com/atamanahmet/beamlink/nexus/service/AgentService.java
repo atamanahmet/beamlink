@@ -3,7 +3,6 @@ package com.atamanahmet.beamlink.nexus.service;
 import com.atamanahmet.beamlink.nexus.domain.Agent;
 import com.atamanahmet.beamlink.nexus.domain.enums.AgentState;
 import com.atamanahmet.beamlink.nexus.dto.*;
-import com.atamanahmet.beamlink.nexus.exception.AgentAlreadyExistsException;
 import com.atamanahmet.beamlink.nexus.exception.AgentNotFoundException;
 import com.atamanahmet.beamlink.nexus.exception.NameAlreadyInUseException;
 import com.atamanahmet.beamlink.nexus.repository.AgentRepository;
@@ -48,7 +47,8 @@ public class AgentService {
         Optional<Agent> existing = agentRepository.findByIpAddressAndPort(request.getIpAddress(), request.getPort());
         if (existing.isPresent()) {
             log.info("Agent already registered: {}. Returning existing record.", existing.get().getId());
-            return new AgentRegistrationResponse(existing.get().getId(), existing.get().getState(), existing.get().getAuthToken(), existing.get().getPublicToken());
+            return new AgentRegistrationResponse(existing.get().getId(), existing.get().getState(),
+                    existing.get().getAuthToken(), existing.get().getPublicToken());
         }
 
         try {
@@ -73,20 +73,19 @@ public class AgentService {
             Agent existingAgent = agentRepository.findByIpAddressAndPort(request.getIpAddress(), request.getPort())
                     .orElseThrow(() -> new IllegalStateException("Agent disappeared after constraint violation"));
             log.info("Race condition on register, returning existing agent: {}", existingAgent.getId());
-            return new AgentRegistrationResponse(existingAgent.getId(), existingAgent.getState(), existingAgent.getAuthToken(), existingAgent.getPublicToken());
+            return new AgentRegistrationResponse(existingAgent.getId(), existingAgent.getState(),
+                    existingAgent.getAuthToken(), existingAgent.getPublicToken());
         }
     }
 
-    public Agent saveAgent(Agent agent){
+    public Agent saveAgent(Agent agent) {
 
         return agentRepository.save(agent);
     }
 
-    public Optional<Agent> getByIpAddressAndPort(String ipAddress, int port){
-        return agentRepository.findByIpAddressAndPort(ipAddress,port);
+    public Optional<Agent> getByIpAddressAndPort(String ipAddress, int port) {
+        return agentRepository.findByIpAddressAndPort(ipAddress, port);
     }
-
-
 
     /**
      * This update request is received from agent itself
@@ -150,7 +149,8 @@ public class AgentService {
 
     public Agent findByAgentId(UUID agentId) {
 
-        return agentRepository.findById(agentId).orElseThrow(() -> new AgentNotFoundException("Unknown agent: " + agentId));
+        return agentRepository.findById(agentId)
+                .orElseThrow(() -> new AgentNotFoundException("Unknown agent: " + agentId));
     }
 
     public List<Agent> getAllAgents() {
@@ -173,7 +173,6 @@ public class AgentService {
         return agentRepository.findByState(state);
     }
 
-
     public List<Agent> getOnlineAgentsBefore(Instant threshold) {
 
         return agentRepository.findByLastSeenAtBefore(threshold);
@@ -190,14 +189,11 @@ public class AgentService {
 
         Instant threshold = Instant.now().minus(Duration.ofMinutes(2));
 
-        long online =
-                agentRepository.countByLastSeenAtAfter(threshold);
+        long online = agentRepository.countByLastSeenAtAfter(threshold);
 
-        long pending =
-                agentRepository.countByState(AgentState.PENDING_APPROVAL);
+        long pending = agentRepository.countByState(AgentState.PENDING_APPROVAL);
 
-        long pendingRename =
-                agentRepository.countByStateAndRequestedNameIsNotNull(AgentState.APPROVED);
+        long pendingRename = agentRepository.countByStateAndRequestedNameIsNotNull(AgentState.APPROVED);
 
         long offline = total - online;
 
@@ -206,8 +202,7 @@ public class AgentService {
                 online,
                 offline,
                 pending,
-                pendingRename
-        );
+                pendingRename);
     }
 
     public List<Agent> getPendingRenames() {
@@ -331,8 +326,6 @@ public class AgentService {
         Instant now = Instant.now();
         Instant threshold = now.minus(Duration.ofMinutes(2));
         Instant lastSeen = agent.getLastSeenAt();
-
-        boolean agentOnline = agent.isOnline();
 
         boolean online = false;
 

@@ -11,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.List;
@@ -32,7 +31,8 @@ public class AgentPushService {
         List<Agent> unpushed = agentRepository
                 .findByStateAndApprovalPushedFalse(AgentState.APPROVED);
 
-        if (unpushed.isEmpty()) return;
+        if (unpushed.isEmpty())
+            return;
 
         log.info("Pushing approval to {} agent(s).", unpushed.size());
 
@@ -73,8 +73,7 @@ public class AgentPushService {
 
             webSocketHandler.sendMessage(agent.getId(), Map.of(
                     "type", "rename_request",
-                    "payload", payload
-            ));
+                    "payload", payload));
             log.info("Rename pushed via WS to agent {}: {}", agent.getId(), agent.getName());
         } catch (Exception e) {
             log.warn("WS rename push failed for agent {} — falling back to HTTP: {}",
@@ -108,8 +107,7 @@ public class AgentPushService {
         try {
             webSocketHandler.sendMessage(agent.getId(), Map.of(
                     "type", "approval_push",
-                    "payload", payload
-            ));
+                    "payload", payload));
             markPushed(agent);
             log.info("Approval pushed via WS to agent {}", agent.getId());
         } catch (Exception e) {

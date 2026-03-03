@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -25,5 +25,5 @@ public class PendingRename {
     private String agentId;
     private String currentName;
     private String requestedName;
-    private LocalDateTime requestedAt;
+    private Instant requestedAt;
 }

@@ -38,8 +38,6 @@ public class AgentSessionService {
         Instant threshold = now.minus(Duration.ofMinutes(2));
         Instant lastSeen = agent.getLastSeenAt();
 
-        boolean agentOnline = agent.isOnline();
-
         boolean online = false;
 
         if (lastSeen != null) {

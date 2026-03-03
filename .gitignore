@@ -13,6 +13,7 @@ beamlink-agent-dist/
 *.jar
 node_modules/
 dist/
+.env
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
