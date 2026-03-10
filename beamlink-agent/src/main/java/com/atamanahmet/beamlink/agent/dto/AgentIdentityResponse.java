@@ -15,7 +15,7 @@ import java.util.UUID;
 public class AgentIdentityResponse {
     private UUID agentId;
     private String agentName;
+    private AgentState state;
     private String authToken;
     private String publicToken;
-    private AgentState state;
 }

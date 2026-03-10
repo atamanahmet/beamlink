@@ -6,17 +6,13 @@ import com.atamanahmet.beamlink.nexus.dto.AgentDTO;
 import com.atamanahmet.beamlink.nexus.dto.LogSyncRequest;
 import com.atamanahmet.beamlink.nexus.dto.StatusUpdatePayload;
 import com.atamanahmet.beamlink.nexus.dto.WebSocketMessageDTO;
-import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
 import com.atamanahmet.beamlink.nexus.service.AgentSessionService;
 import com.atamanahmet.beamlink.nexus.service.PeerListService;
 import com.atamanahmet.beamlink.nexus.service.TransferLogService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 
@@ -27,18 +23,19 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AgentWebSocketHandler implements WebSocketHandler {
-
-    private final Logger log = LoggerFactory.getLogger(AgentWebSocketHandler.class);
 
     private final AgentSessionService agentSessionService;
     private final PeerListService peerListService;
     private final ObjectMapper objectMapper;
     private final NexusConfig nexusConfig;
-    private final AgentTokenService agentTokenService;
     private final TransferLogService transferLogService;
+
+    private static final UUID NEXUS_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+    private static final UUID NEXUS_PUBLIC_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     private final Map<UUID, WebSocketSession> sessions = new ConcurrentHashMap<>();
 
@@ -77,10 +74,8 @@ public class AgentWebSocketHandler implements WebSocketHandler {
                 log.warn("log_sync received but session has no agentId attribute");
                 return;
             }
-
             List<UUID> syncedIds = transferLogService.sync(agentId, logs);
             log.debug("Log sync from agent {}: {}/{} logs accepted", agentId, syncedIds.size(), logs.size());
-
         } catch (Exception e) {
             log.error("Error handling log_sync for session {}: {}", session.getId(), e.getMessage());
         }
@@ -93,18 +88,7 @@ public class AgentWebSocketHandler implements WebSocketHandler {
                 log.warn("peer_update received but session has no agentId attribute");
                 return;
             }
-
-            // Here you can implement logic to handle peer list updates
-            // For example, you might log or refresh peer info in Nexus
             log.debug("Received peer_update from agent {} with {} peers", agentId, payloadList.size());
-
-            // Optional: validate list contents
-            for (Object item : payloadList) {
-                if (!(item instanceof Map)) {
-                    log.warn("peer_update item is not a Map: {}", item.getClass().getSimpleName());
-                }
-            }
-
         } catch (Exception e) {
             log.error("Error handling peer_update for session {}: {}", session.getId(), e.getMessage());
         }
@@ -127,17 +111,11 @@ public class AgentWebSocketHandler implements WebSocketHandler {
             }
 
             log.debug("Status updated for agent {}", agentId);
-
         } catch (Exception e) {
-            log.error("Error handling status_update for session {}: {}",
-                    session.getId(), e.getMessage());
+            log.error("Error handling status_update for session {}: {}", session.getId(), e.getMessage());
         }
     }
 
-    /**
-     * Excludes agents own ip
-     * Adds nexus as a peer
-     */
     private void pushPeerUpdate(WebSocketSession session, UUID agentId) {
         try {
             List<AgentDTO> peers = new ArrayList<>();
@@ -155,7 +133,6 @@ public class AgentWebSocketHandler implements WebSocketHandler {
 
             session.sendMessage(new TextMessage(objectMapper.writeValueAsString(message)));
             log.debug("Pushed peer_update to agent {} ({} peers)", agentId, peers.size());
-
         } catch (Exception e) {
             log.error("Failed to push peer_update to agent {}: {}", agentId, e.getMessage());
         }
@@ -190,7 +167,7 @@ public class AgentWebSocketHandler implements WebSocketHandler {
                 log.error("Failed to send message to agent {}: {}", agentId, e.getMessage());
             }
         } else {
-            log.debug("No open WS session for agent {} — message not sent", agentId);
+            log.debug("No open WS session for agent {}, message not sent", agentId);
         }
     }
 
@@ -199,24 +176,19 @@ public class AgentWebSocketHandler implements WebSocketHandler {
         return session != null && session.isOpen();
     }
 
-    // Helper, reads agentId from handshake interceptor
     private UUID getAgentId(WebSocketSession session) {
         Object attr = session.getAttributes().get(AgentHandshakeInterceptor.AGENT_ID_ATTR);
         return (attr instanceof UUID) ? (UUID) attr : null;
     }
 
-    // TODO: move to peerlistservice
     private AgentDTO buildNexusPeer() {
-        String token = agentTokenService.generatePublicToken(UUID.fromString("00000000-0000-0000-0000-000000000000"),
-                "Nexus");
-
         return AgentDTO.builder()
-                .id(UUID.fromString("00000000-0000-0000-0000-000000000000"))
-                .agentName("Nexus")
+                .id(NEXUS_ID)
+                .agentName(nexusConfig.getName())
                 .ipAddress(nexusConfig.getIpAddress())
                 .port(nexusConfig.getNexusPort())
                 .online(true)
-                .publicToken(token)
+                .publicId(NEXUS_PUBLIC_ID)
                 .build();
     }
 }

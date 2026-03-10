@@ -45,7 +45,8 @@ public class SecurityConfig {
                                 "/api/upload/check",
                                 "/api/upload",
                                 "/api/update/receive",
-                                "/api/ping"
+                                "/api/ping",
+                                "/api/agent/events"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

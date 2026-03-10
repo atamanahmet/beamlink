@@ -1,17 +1,18 @@
 package com.atamanahmet.beamlink.nexus.exception;
 
-
-import com.atamanahmet.beamlink.nexus.domain.Agent;
+import com.atamanahmet.beamlink.nexus.domain.enums.AgentState;
 import lombok.Getter;
 
+import java.util.UUID;
+
+@Getter
 public class AgentAlreadyExistsException extends RuntimeException {
+    private final UUID agentId;
+    private final AgentState state;
 
-    @Getter
-    private final Agent agent;
-
-    public AgentAlreadyExistsException(Agent agent) {
-        super("Agent already registered: " + agent.getIpAddress() + ":" + agent.getPort());
-        this.agent = agent;
+    public AgentAlreadyExistsException(UUID agentId, AgentState state) {
+        super("Agent already exists: " + agentId);
+        this.agentId = agentId;
+        this.state = state;
     }
-
 }

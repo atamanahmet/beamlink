@@ -1,6 +1,8 @@
 package com.atamanahmet.beamlink.nexus.security.config;
 
+import com.atamanahmet.beamlink.nexus.security.DynamicCorsFilter;
 import com.atamanahmet.beamlink.nexus.security.filter.AgentTokenFilter;
+import com.atamanahmet.beamlink.nexus.security.enums.Role;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -10,18 +12,12 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-
-import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -29,6 +25,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final AgentTokenFilter agentTokenFilter;
+    private final DynamicCorsFilter dynamicCorsFilter;
 
     @Value("${nexus.admin.username}")
     private String adminUsername;
@@ -36,26 +33,22 @@ public class SecurityConfig {
     @Value("${nexus.admin.password}")
     private String adminPassword;
 
+    private static final String ADMIN = Role.ADMIN.name();
+    private static final String AGENT = Role.AGENT.name();
+    private static final String AGENT_PUBLIC = Role.AGENT_PUBLIC.name();
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .cors(AbstractHttpConfigurer::disable) // handled by DynamicCorsFilter
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(dynamicCorsFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(agentTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        // Agent public endpoints
+
+                        // Static frontend
                         .requestMatchers(
-                                "/api/agents/register",
-                                "/api/agents/ping",
-                                "/api/agents/status",
-                                "/api/agents/identify",
-                                "/api/agents/check-approval",
-                                "/api/agents/*/exists",
-                                "/ws/agents",
-                                "/api/upload/check",
-                                "/api/upload",
-                                "/api/nexus/auth/identity",
                                 "/",
                                 "/index.html",
                                 "/assets/**",
@@ -65,13 +58,33 @@ public class SecurityConfig {
                                 "/vite.svg"
                         ).permitAll()
 
+                        // Unauthed Agent endpoints
+                        .requestMatchers(
+                                "/api/agents/register",
+                                "/api/agents/status",
+                                "/api/agents/ping",
+                                "/api/agents/identify",
+                                "/api/agents/check-approval",
+                                "/api/agents/*/exists",
+                                "/ws/agents"
+                        ).permitAll()
+
+                        // Upload, for both auth and public tokens
+                        .requestMatchers(
+                                "/api/upload/check",
+                                "/api/upload"
+                        ).hasAnyRole(AGENT, AGENT_PUBLIC)
+
                         // Admin login
                         .requestMatchers("/api/nexus/auth/login").permitAll()
 
-                        // Admin-only Nexus endpoints
-                        .requestMatchers("/api/nexus/auth/login").permitAll()
-                        .requestMatchers("/api/nexus/peers").authenticated()
-                        .requestMatchers("/api/nexus/**").hasRole("ADMIN") // dashboard
+                        .requestMatchers("/api/nexus/peers/**").hasAnyRole(AGENT, AGENT_PUBLIC, ADMIN)
+
+                        .requestMatchers("/api/nexus/auth/identity").hasAnyRole(AGENT, ADMIN)
+
+                        // Admin only
+                        .requestMatchers("/api/nexus/**").hasRole(ADMIN)
+
                         .anyRequest().authenticated()
                 )
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -82,32 +95,17 @@ public class SecurityConfig {
 
     @Bean
     public UserDetailsService userDetailsService() {
-        UserDetails admin = User.builder()
-                .username(adminUsername)
-                .password(passwordEncoder().encode(adminPassword))
-                .roles("ADMIN")
-                .build();
-        return new InMemoryUserDetailsManager(admin);
+        return new InMemoryUserDetailsManager(
+                User.builder()
+                        .username(adminUsername)
+                        .password(passwordEncoder().encode(adminPassword))
+                        .roles(ADMIN)
+                        .build()
+        );
     }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173")); // adjust port
-        config.setAllowedMethods(List.of("*"));
-        config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true);
-
-        UrlBasedCorsConfigurationSource source =
-                new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
-
-        return source;
-    }
-
 }

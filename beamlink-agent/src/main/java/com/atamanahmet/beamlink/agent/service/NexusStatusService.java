@@ -49,7 +49,7 @@ public class NexusStatusService {
 
     /**
      * Periodically checks if agent is registered/approved.
-     * Only HTTP; status/log updates are skipped once WS is active.
+     * Only HTTP. status/log updates are skipped once WS is active.
      */
     @Scheduled(fixedRate = 30_000)
     public void ensureRegistered() {
@@ -61,7 +61,7 @@ public class NexusStatusService {
                 connectionState.reportOffline();
                 return;
             }
-            connectionState.reportOnline(); // may fire NexusOnlineEvent → registerWithNexus
+            connectionState.reportOnline();
             if (registrationService.isRegistrationInProgress()) {
                 log.debug("Registration already triggered by online event. Skipping.");
                 return;
@@ -130,6 +130,31 @@ public class NexusStatusService {
     }
 
     /**
+     * Try to refresh identity from Nexus before giving up.
+     * Returns true if identity was successfully refreshed.
+     */
+    private boolean tryRefreshIdentity() {
+        try {
+            log.info("Attempting to refresh identity from Nexus before forcing reset...");
+            registrationService.resolveIdentityFromNexus();
+            return agentService.getAuthToken() != null;
+        } catch (Exception e) {
+            log.warn("Identity refresh failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private void handleAuthError(int status, String context) {
+        log.warn("{} rejected [{}]. Attempting identity refresh before lost-agent.", context, status);
+        if (!tryRefreshIdentity()) {
+            log.warn("Identity refresh failed. Publishing lost-agent event.");
+            nexusEventPublisher.publishLostAgent(context + " rejected with " + status);
+        } else {
+            log.info("Identity refreshed successfully. Will retry on next cycle.");
+        }
+    }
+
+    /**
      * HTTP status report (skipped once WS is connected)
      */
     @Scheduled(fixedRate = 30_000)
@@ -154,8 +179,7 @@ public class NexusStatusService {
         } catch (WebClientResponseException ex) {
             int status = ex.getStatusCode().value();
             if (status == 404 || status == 401 || status == 403) {
-                log.warn("HTTP status rejected [{}]. Publishing lost-agent event.", status);
-                nexusEventPublisher.publishLostAgent("HTTP status rejected with " + status);
+                handleAuthError(status, "HTTP status");
             } else {
                 log.warn("Unexpected HTTP status response [{}]", status);
             }
@@ -171,13 +195,20 @@ public class NexusStatusService {
     public void syncLogsToNexus() {
         if (!agentService.isApproved()) return;
 
+        if (wsService.isConnected()) {
+            log.debug("WebSocket active, skipping HTTP log sync.");
+            return;
+        }
+
         try {
             List<TransferLog> unsyncedLogs = logService.getUnsyncedLogs();
             if (unsyncedLogs.isEmpty()) return;
 
+            String authToken = agentService.getAuthToken();
+
             nexusWebClient.post()
                     .uri(config.getNexusUrl() + "/api/logs/sync")
-                    .header("X-Auth-Token", agentService.getAuthToken())
+                    .header("X-Auth-Token", authToken)
                     .bodyValue(unsyncedLogs)
                     .retrieve()
                     .toBodilessEntity()
@@ -189,14 +220,12 @@ public class NexusStatusService {
                     .map(TransferLog::getId)
                     .toList();
             logService.markAsSynced(syncedIds);
-
             log.debug("HTTP logs synced to Nexus ({} logs)", unsyncedLogs.size());
 
         } catch (WebClientResponseException ex) {
             int status = ex.getStatusCode().value();
             if (status == 404 || status == 401 || status == 403) {
-                log.warn("HTTP log sync rejected [{}]. Publishing lost-agent event.", status);
-                nexusEventPublisher.publishLostAgent("HTTP log sync rejected with " + status);
+                handleAuthError(status, "HTTP log sync");
             } else {
                 log.warn("Unexpected HTTP log sync response [{}]", status);
             }

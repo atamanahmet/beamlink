@@ -1,8 +1,12 @@
 package com.atamanahmet.beamlink.nexus.security.filter;
 
+import com.atamanahmet.beamlink.nexus.domain.Agent;
 import com.atamanahmet.beamlink.nexus.domain.enums.AgentState;
 import com.atamanahmet.beamlink.nexus.repository.AgentRepository;
 import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
+import com.atamanahmet.beamlink.nexus.security.enums.Role;
+import com.atamanahmet.beamlink.nexus.security.enums.TokenType;
+import com.atamanahmet.beamlink.nexus.exception.InvalidTokenException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -21,9 +25,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
-@Slf4j
 public class AgentTokenFilter extends OncePerRequestFilter {
 
     private final AgentTokenService agentTokenService;
@@ -34,24 +38,31 @@ public class AgentTokenFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain)
             throws ServletException, IOException {
-
-        String token = extractToken(request);
-
-        if (token != null && agentTokenService.validateToken(token)) {
-
-            String scope = agentTokenService.extractScope(token);
-
-            if ("admin".equals(scope)) {
-                setAdminAuthentication(token);
-            } else if ("auth".equals(scope) || "public".equals(scope)) {
-                setAgentAuthentication(token);
+        try {
+            String token = extractToken(request);
+            if (token != null) {
+                processToken(token);
             }
+        } catch (InvalidTokenException e) {
+            log.warn("Token processing failed: {}", e.getMessage());
         }
 
-        // Always continue the chain
         chain.doFilter(request, response);
     }
 
+    private void processToken(String token) {
+        TokenType tokenType = agentTokenService.extractTokenType(token);
+
+        switch (tokenType) {
+            case ADMIN -> setAdminAuthentication(token);
+            case AGENT_AUTH -> setAgentAuthAuthentication(token);
+            case AGENT_PUBLIC -> setAgentPublicAuthentication(token);
+        }
+    }
+
+    /**
+     * Extracts JWT from cookie or header
+     */
     private String extractToken(HttpServletRequest request) {
         if (request.getCookies() != null) {
             String cookieToken = Arrays.stream(request.getCookies())
@@ -65,36 +76,67 @@ public class AgentTokenFilter extends OncePerRequestFilter {
         return request.getHeader("X-Auth-Token");
     }
 
+    /**
+     * Sets admin authentication in SecurityContext
+     */
     private void setAdminAuthentication(String token) {
-        UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(
-                        agentTokenService.extractSubject(token),
-                        null,
-                        List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
-                );
+        String subject = agentTokenService.extractSubject(token);
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        subject,
+                        null,
+                        List.of(new SimpleGrantedAuthority(Role.ADMIN.getAuthority()))
+                )
+        );
     }
 
-    private void setAgentAuthentication(String token) {
+    /**
+     * Sets agent authentication after verifying token and agent state
+     */
+    private void setAgentAuthAuthentication(String token) {
         UUID agentId = agentTokenService.extractAgentId(token);
 
-        agentRepository.findById(agentId).ifPresent(agent -> {
-            if (agent.getState() == AgentState.APPROVED) {
+        Agent agent = agentRepository.findById(agentId).orElse(null);
+        if (agent == null) {
+            log.warn("Auth token references unknown agent: {}", agentId);
+            return;
+        }
 
-                boolean isAuthToken = token.equals(agent.getAuthToken());
-                boolean isPublicToken = token.equals(agent.getPublicToken());
+        if (agent.getState() != AgentState.APPROVED) {
+            log.warn("Auth token rejected for non-approved agent: {}", agentId);
+            return;
+        }
 
-                if (isAuthToken || isPublicToken) {
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    agentId,
-                                    null,
-                                    List.of(new SimpleGrantedAuthority("ROLE_AGENT"))
-                            );
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                }
-            }
-        });
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        agentId,
+                        null,
+                        List.of(new SimpleGrantedAuthority(Role.AGENT.getAuthority()))
+                )
+        );
+    }
+
+    private void setAgentPublicAuthentication(String token) {
+        UUID publicId = agentTokenService.extractPublicId(token);
+
+        Agent agent = agentRepository.findByPublicId(publicId).orElse(null);
+        if (agent == null) {
+            log.warn("Public token references unknown publicId: {}", publicId);
+            return;
+        }
+
+        if (agent.getState() != AgentState.APPROVED) {
+            log.warn("Public token rejected for non-approved agent: {}", agent.getId());
+            return;
+        }
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        agent.getId(),
+                        null,
+                        List.of(new SimpleGrantedAuthority(Role.AGENT_PUBLIC.getAuthority()))
+                )
+        );
     }
 }

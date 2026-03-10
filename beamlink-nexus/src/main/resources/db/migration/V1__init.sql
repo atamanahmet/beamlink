@@ -1,12 +1,10 @@
 CREATE TABLE registered_agents (
     id              UUID            NOT NULL PRIMARY KEY,
     name            VARCHAR(255),
-    approved_name   VARCHAR(255),
     ip_address      VARCHAR(255),
     port            INTEGER         NOT NULL,
     state           VARCHAR(50)     NOT NULL,
-    auth_token      VARCHAR(512),
-    public_token    VARCHAR(512),
+    public_id       UUID            UNIQUE,
     registered_at   TIMESTAMPTZ,
     requested_name  VARCHAR(255),
     approved_at     TIMESTAMPTZ,

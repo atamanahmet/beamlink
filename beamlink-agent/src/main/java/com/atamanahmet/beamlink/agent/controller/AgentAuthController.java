@@ -1,7 +1,9 @@
 package com.atamanahmet.beamlink.agent.controller;
 
+import com.atamanahmet.beamlink.agent.domain.Agent;
 import com.atamanahmet.beamlink.agent.dto.LoginRequest;
 import com.atamanahmet.beamlink.agent.service.AgentAuthService;
+import com.atamanahmet.beamlink.agent.service.AgentService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -43,26 +45,36 @@ public class AgentAuthController {
         cookie.setMaxAge(60 * 60 * 8);
         response.addCookie(cookie);
 
-        String publicToken = agentAuthService.getPublicToken();
 
-        return ResponseEntity
-                .status(HttpStatus.OK)
-                .body(Map.of("publicToken", publicToken));
+        Agent agent = agentAuthService.getAgent();
+        return ResponseEntity.ok(Map.of(
+                "agentId",     agent.getId() != null ? agent.getId().toString() : "",
+                "agentName",   agent.getAgentName() != null ? agent.getAgentName() : "",
+                "state",       agent.getState() != null ? agent.getState().name() : "",
+                "publicToken", agent.getPublicToken() != null ? agent.getPublicToken() : "",
+                "authToken",   agent.getAuthToken() != null ? agent.getAuthToken() : ""
+        ));
     }
 
     @GetMapping("/me")
     public ResponseEntity<?> me(HttpServletRequest request) {
-
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        String publicToken = agentAuthService.getPublicToken();
-        if (publicToken == null) {
+        Agent agent = agentAuthService.getAgent();
+        if (agent.getPublicToken() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        return ResponseEntity.ok(Map.of("publicToken", publicToken));
+
+        return ResponseEntity.ok(Map.of(
+                "agentId",     agent.getId() != null ? agent.getId().toString() : "",
+                "agentName",   agent.getAgentName() != null ? agent.getAgentName() : "",
+                "state",       agent.getState() != null ? agent.getState().name() : "",
+                "publicToken", agent.getPublicToken(),
+                "authToken",   agent.getAuthToken() != null ? agent.getAuthToken() : ""
+        ));
     }
 
     @PostMapping("/logout")
@@ -78,4 +90,6 @@ public class AgentAuthController {
                 .status(HttpStatus.OK)
                 .build();
     }
+
+
 }

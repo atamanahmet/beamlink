@@ -1,10 +1,8 @@
 package com.atamanahmet.beamlink.nexus.exception;
 
-import com.atamanahmet.beamlink.nexus.domain.Agent;
 import com.atamanahmet.beamlink.nexus.dto.AgentRegistrationResponse;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -12,96 +10,63 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @RestControllerAdvice
 @RequiredArgsConstructor
 public class GlobalExceptionHandler {
 
-    private final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-
     @ExceptionHandler(AgentAlreadyExistsException.class)
     public ResponseEntity<AgentRegistrationResponse> handleAgentAlreadyExists(AgentAlreadyExistsException ex) {
-
-        Agent agent = ex.getAgent();
-
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
-                .body(new AgentRegistrationResponse(agent.getId(), agent.getState(), agent.getAuthToken(),
-                        agent.getPublicToken()));
+                .body(new AgentRegistrationResponse(ex.getAgentId(), ex.getState()));
     }
 
     @ExceptionHandler(NameAlreadyInUseException.class)
-    public ResponseEntity<?> handleAgentAlreadyExists(NameAlreadyInUseException ex) {
-
+    public ResponseEntity<String> handleNameAlreadyInUse(NameAlreadyInUseException ex) {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body("Name is already in use");
     }
 
+    @ExceptionHandler(AgentNotFoundException.class)
+    public ResponseEntity<String> handleAgentNotFound(AgentNotFoundException ex) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ex.getMessage());
+    }
+
     @ExceptionHandler(InsufficientDiskSpaceException.class)
-    public ResponseEntity<Map<String, Object>> handleInsufficientDiskSpaceException(InsufficientDiskSpaceException e) {
-
-        log.error("Insufficient disk space: {}", e.getMessage());
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", false);
-        response.put("error", "Insufficient disk space");
-        response.put("message", e.getMessage());
-
+    public ResponseEntity<Map<String, Object>> handleInsufficientDiskSpace(InsufficientDiskSpaceException ex) {
+        log.error("Insufficient disk space: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.INSUFFICIENT_STORAGE)
-                .body(response);
+                .body(Map.of("success", false, "error", "Insufficient disk space", "message", ex.getMessage()));
     }
 
     @ExceptionHandler(FileTransferException.class)
-    public ResponseEntity<Map<String, Object>> handleFileTransferException(FileTransferException e) {
-        log.error("File transfer failed: {}", e.getMessage(), e);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", false);
-        response.put("error", "File transfer failed");
-        response.put("message", e.getMessage());
-
+    public ResponseEntity<Map<String, Object>> handleFileTransfer(FileTransferException ex) {
+        log.error("File transfer failed: {}", ex.getMessage(), ex);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(response);
+                .body(Map.of("success", false, "error", "File transfer failed", "message", ex.getMessage()));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<Map<String, Object>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
-
+    public ResponseEntity<Map<String, Object>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException ex) {
         log.warn("File size exceeds maximum allowed size");
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", false);
-        response.put("error", "File too large");
-        response.put("message", "File size exceeds the maximum allowed size");
-
         return ResponseEntity
                 .status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(response);
+                .body(Map.of("success", false, "error", "File too large", "message", "File size exceeds the maximum allowed size"));
     }
 
     @ExceptionHandler(IOException.class)
-    public ResponseEntity<Map<String, Object>> handleIOException(IOException e) {
-        log.error("IO error during file operation: {}", e.getMessage(), e);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", false);
-        response.put("error", "IO error");
-        response.put("message", "Failed to save file: " + e.getMessage());
-
+    public ResponseEntity<Map<String, Object>> handleIOException(IOException ex) {
+        log.error("IO error during file operation: {}", ex.getMessage(), ex);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(response);
-    }
-
-    @ExceptionHandler(AgentNotFoundException.class)
-    public ResponseEntity<String> handleAgentNotFound(AgentNotFoundException e) {
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
-                .body(e.getMessage());
+                .body(Map.of("success", false, "error", "IO error", "message", "Failed to save file: " + ex.getMessage()));
     }
 }

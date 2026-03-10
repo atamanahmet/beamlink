@@ -33,24 +33,16 @@ public class AgentSessionService {
     }
 
     public AgentDTO toDTO(Agent agent) {
-
-        Instant now = Instant.now();
-        Instant threshold = now.minus(Duration.ofMinutes(2));
+        Instant threshold = Instant.now().minus(Duration.ofMinutes(2));
         Instant lastSeen = agent.getLastSeenAt();
-
-        boolean online = false;
-
-        if (lastSeen != null) {
-            online = lastSeen.isAfter(threshold);
-        }
 
         return AgentDTO.builder()
                 .id(agent.getId())
                 .agentName(agent.getName())
                 .ipAddress(agent.getIpAddress())
                 .port(agent.getPort())
-                .online(online)
-                .publicToken(agent.getPublicToken())
+                .online(lastSeen != null && lastSeen.isAfter(threshold))
+                .publicId(agent.getPublicId())
                 .build();
     }
 }

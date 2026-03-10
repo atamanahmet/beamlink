@@ -28,9 +28,10 @@ public class PeerController {
      */
     @GetMapping
     public ResponseEntity<List<Peer>> getAllPeers() {
-
-        List<Peer> peers = peerCacheService.getAllPeers(agentService.getAgent());
-
+        List<Peer> peers = peerCacheService.getAllPeers(
+                agentService.getAgentId(),
+                agentService.getPublicToken()
+        );
         return ResponseEntity
                 .status(HttpStatus.OK)
                 .body(peers);
@@ -41,10 +42,10 @@ public class PeerController {
      */
     @GetMapping("/online")
     public ResponseEntity<List<Peer>> getPeers() {
-
-        List<Peer> peers = peerCacheService.getOnlinePeers(agentService.getAgent());
-
-        // All peers
+        List<Peer> peers = peerCacheService.getOnlinePeers(
+                agentService.getAgentId(),
+                agentService.getPublicToken()
+        );
         return ResponseEntity
                 .status(HttpStatus.OK)
                 .body(peers);
@@ -55,11 +56,14 @@ public class PeerController {
      */
     @PostMapping("/refresh")
     public ResponseEntity<List<Peer>> refreshPeers() {
-
-        peerCacheService.refreshPeersFromNexus(agentService.getAgent());
-
-        List<Peer> peers = peerCacheService.getAllPeers(agentService.getAgent());
-
+        peerCacheService.refreshPeersFromNexus(
+                agentService.getAgentId(),
+                agentService.getPublicToken()
+        );
+        List<Peer> peers = peerCacheService.getAllPeers(
+                agentService.getAgentId(),
+                agentService.getPublicToken()
+        );
         return ResponseEntity
                 .status(HttpStatus.OK)
                 .body(peers);

@@ -62,9 +62,9 @@ public class RegistrationService {
     }
 
     /**
-    * Registers agent with nexus and transitions state to PENDING_APPROVAL.
-    * Nexus will push approval async with ApprovalController.
-     * */
+     * Registers agent with nexus and transitions state to PENDING_APPROVAL.
+     * Nexus will push approval async with ApprovalController.
+     */
     public void registerWithNexus() {
         if (!registrationInProgress.compareAndSet(false, true)) {
             log.info("Registration already in progress. Skipping.");
@@ -90,11 +90,13 @@ public class RegistrationService {
 
             if (result != null) {
                 agentService.updateAgentId(result.getAgentId());
-                if (result.getAuthToken() != null) {
-                    agentService.storeTokens(result.getAuthToken(), result.getPublicToken());
-                }
                 agentService.transitionTo(result.getAgentState());
                 log.info("✓ Registered with Nexus [id={}]. State={}", result.getAgentId(), result.getAgentState());
+
+                if (result.getAgentState() == AgentState.APPROVED) {
+                    log.info("Agent already approved on Nexus. Resolving identity to get fresh tokens.");
+                    resolveIdentityFromNexus();
+                }
             } else {
                 log.warn("Registration returned empty response. Will retry next cycle.");
             }
@@ -154,4 +156,3 @@ public class RegistrationService {
         return registrationInProgress.get();
     }
 }
-

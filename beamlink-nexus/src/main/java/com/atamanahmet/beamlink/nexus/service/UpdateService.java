@@ -1,14 +1,13 @@
 package com.atamanahmet.beamlink.nexus.service;
 
 import com.atamanahmet.beamlink.nexus.domain.Agent;
+import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,12 +15,14 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class UpdateService {
 
     private final AgentService agentService;
+    private final AgentTokenService agentTokenService;
+    private final WebClient.Builder webClientBuilder;
 
     private static final String PACKAGE_NAME = "update.zip";
 
@@ -51,23 +52,26 @@ public class UpdateService {
     }
 
     private void sendPackage(Agent agent) {
-        try {
-            Path packagePath = getStorageDir().resolve(PACKAGE_NAME);
-            if (!Files.exists(packagePath)) {
-                throw new RuntimeException("No update package found on Nexus");
-            }
+        Path packagePath = getStorageDir().resolve(PACKAGE_NAME);
+        if (!Files.exists(packagePath)) {
+            throw new RuntimeException("No update package found on Nexus");
+        }
 
+        try {
             byte[] fileBytes = Files.readAllBytes(packagePath);
             String url = "http://" + agent.getIpAddress() + ":" + agent.getPort() + "/api/update/receive";
 
-            RestTemplate restTemplate = new RestTemplate();
+            String authToken = agentTokenService.generateAuthToken(agent.getId());
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("X-Auth-Token", agent.getAuthToken());
-            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-
-            HttpEntity<byte[]> entity = new HttpEntity<>(fileBytes, headers);
-            restTemplate.postForEntity(url, entity, Void.class);
+            webClientBuilder.build()
+                    .post()
+                    .uri(url)
+                    .header("X-Auth-Token", authToken)
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .bodyValue(fileBytes)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .block();
 
             log.info("Update package pushed to agent {} at {}", agent.getId(), agent.getIpAddress());
         } catch (Exception e) {
@@ -75,5 +79,4 @@ public class UpdateService {
             throw new RuntimeException("Push failed", e);
         }
     }
-
 }

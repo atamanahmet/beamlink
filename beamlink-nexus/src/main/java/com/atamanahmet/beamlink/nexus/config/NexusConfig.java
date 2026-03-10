@@ -19,4 +19,13 @@ public class NexusConfig {
 
     @Value("${nexus.ip-address}")
     private String ipAddress;
+
+    @Value("${nexus.name}")
+    private String name;
+
+    @Value("${nexus.admin.username}")
+    private String adminUsername;
+
+    @Value("${nexus.admin.password}")
+    private String adminPassword;
 }

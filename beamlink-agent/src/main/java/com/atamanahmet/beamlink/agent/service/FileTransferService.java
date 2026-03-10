@@ -27,8 +27,8 @@ public class FileTransferService {
     private final Logger log = LoggerFactory.getLogger(FileTransferService.class);
 
     /**
-     * Receive file stream - DIRECT WRITE to disk as bytes arrive
-     * No temp files, no double-write penalty
+     * Receive file stream, DIRECT WRITE to disk as bytes arrive
+     * No temp files, no double write
      */
     public long receiveFileStream(
             InputStream inputStream,
@@ -37,28 +37,24 @@ public class FileTransferService {
             UUID fromAgentId,
             String fromName) {
 
-        // Validate
         validateFilename(filename);
 
         Path uploadDir = Paths.get(config.getUploadDirectory());
         Path filepath = uploadDir.resolve(filename);
 
-        // Check disk space BEFORE starting write
         checkDiskSpace(uploadDir, fileSize);
 
-        // Ensure directory exists
         try {
             Files.createDirectories(uploadDir);
         } catch (IOException e) {
             throw new FileTransferException("Failed to create upload directory", e);
         }
 
-        // Stream directly to disk with buffering for performance
         long bytesWritten = 0;
-        byte[] buffer = new byte[8192]; // 8KB buffer for optimal performance
+        byte[] buffer = new byte[8192];
 
         try (BufferedOutputStream outputStream = new BufferedOutputStream(
-                new FileOutputStream(filepath.toFile()), 65536)) { // 64KB output buffer
+                new FileOutputStream(filepath.toFile()), 65536)) {
 
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {

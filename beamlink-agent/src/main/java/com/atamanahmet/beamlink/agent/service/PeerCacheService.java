@@ -1,7 +1,6 @@
 package com.atamanahmet.beamlink.agent.service;
 
 import com.atamanahmet.beamlink.agent.config.AgentConfig;
-import com.atamanahmet.beamlink.agent.domain.Agent;
 import com.atamanahmet.beamlink.agent.domain.Peer;
 import com.atamanahmet.beamlink.agent.domain.PeerCache;
 import com.atamanahmet.beamlink.agent.dto.PeerListResponse;
@@ -13,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -32,21 +33,39 @@ public class PeerCacheService {
     private final WebClient nexusWebClient;
 
     private static final String CACHE_FILE = "peers_cache.json";
+    private volatile boolean initialPeersReceived = false;
 
     @Getter
     private long currentPeerListVersion = 0L;
 
     private List<Peer> cachedPeers = new ArrayList<>();
 
-    public List<Peer> getAllPeers(Agent agent) {
-        if (cachedPeers.isEmpty()) refreshPeersFromNexus(agent);
+    public List<Peer> getAllPeers(UUID agentId, String publicToken) {
+        if (cachedPeers.isEmpty()) refreshPeersFromNexus(agentId, publicToken);
         if (cachedPeers.isEmpty()) loadFromCache();
         return new ArrayList<>(cachedPeers);
     }
 
-    public void refreshPeersFromNexus(Agent agent) {
-        if (!agent.isApproved()) {
-            log.info("Agent not approved yet. Skipping peer refresh.");
+    public List<Peer> getOnlinePeers(UUID agentId, String publicToken) {
+        return getAllPeers(agentId, publicToken).stream()
+                .filter(Peer::isOnline)
+                .toList();
+    }
+
+    public void refreshPeersFromNexus(UUID agentId, String publicToken) {
+        if (initialPeersReceived) {
+            log.debug("WS peer list already active. Skipping HTTP refresh.");
+            return;
+        }
+
+        if (agentId == null) {
+            log.info("No agent ID yet. Skipping peer refresh.");
+            loadFromCache();
+            return;
+        }
+
+        if (publicToken == null || publicToken.isBlank()) {
+            log.warn("No public token available. Skipping peer refresh.");
             loadFromCache();
             return;
         }
@@ -55,11 +74,22 @@ public class PeerCacheService {
             PeerListResponse response = nexusWebClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/api/nexus/peers")
-                            .queryParam("excludeAgentId", agent.getId())
+                            .queryParam("excludeAgentId", agentId)
                             .build())
-                    .header("X-Auth-Token", agent.getPublicToken())
+                    .header("X-Auth-Token", publicToken)
                     .retrieve()
                     .bodyToMono(PeerListResponse.class)
+                    .onErrorResume(WebClientResponseException.class, ex -> {
+                        int status = ex.getStatusCode().value();
+                        if (status == 401 || status == 403) {
+
+                            log.warn("Peer fetch rejected [{}], token may not be active yet. " +
+                                    "only WS peer update for now.", status);
+                        } else {
+                            log.error("Peer fetch failed [{}]: {}", status, ex.getMessage());
+                        }
+                        return Mono.empty();
+                    })
                     .onErrorResume(e -> {
                         log.error("Peer fetch failed: {} - {}", e.getClass().getSimpleName(), e.getMessage());
                         return Mono.empty();
@@ -68,7 +98,7 @@ public class PeerCacheService {
                     .block();
 
             if (response == null) {
-                log.warn("Cannot fetch peers: Nexus offline or agent pending approval");
+                log.debug("No peer response received. Loading from local cache.");
                 loadFromCache();
                 return;
             }
@@ -77,7 +107,8 @@ public class PeerCacheService {
             currentPeerListVersion = response.getVersion();
             saveToCache();
 
-            log.info("Refreshed peer list: {} peers (version: {})", cachedPeers.size(), currentPeerListVersion);
+            log.info("Refreshed peer list: {} peers (version: {})",
+                    cachedPeers.size(), currentPeerListVersion);
 
         } catch (Exception e) {
             log.error("Could not refresh from nexus: {}", e.getMessage());
@@ -85,28 +116,23 @@ public class PeerCacheService {
         }
     }
 
+    public void updatePeers(List<Peer> peers, long version) {
+        cachedPeers = new ArrayList<>(peers);
+        currentPeerListVersion = version;
+        initialPeersReceived = true;
+        saveToCache();
+        log.info("Peer list updated via WS: {} peers (version: {})",
+                cachedPeers.size(), currentPeerListVersion);
+    }
+
     public void updatePeerStatuses(List<PeerStatusUpdate> agentStatuses) {
         if (agentStatuses == null || agentStatuses.isEmpty()) return;
-
         for (PeerStatusUpdate status : agentStatuses) {
             cachedPeers.stream()
                     .filter(p -> p.getAgentId().toString().equals(status.getAgentId()))
                     .findFirst()
                     .ifPresent(p -> p.setOnline(status.isOnline()));
         }
-    }
-
-    public void updatePeers(List<Peer> peers, long version) {
-        cachedPeers = new ArrayList<>(peers);
-        currentPeerListVersion = version;
-        saveToCache();
-        log.info("Peer list updated via WS: {} peers (version: {})", cachedPeers.size(), currentPeerListVersion);
-    }
-
-    public List<Peer> getOnlinePeers(Agent agent) {
-        return getAllPeers(agent).stream()
-                .filter(Peer::isOnline)
-                .toList();
     }
 
     public void clearCache() {
@@ -122,7 +148,8 @@ public class PeerCacheService {
             PeerCache cache = objectMapper.readValue(cacheFile, PeerCache.class);
             cachedPeers = cache.getPeers() != null ? cache.getPeers() : new ArrayList<>();
             currentPeerListVersion = cache.getVersion();
-            log.info("Loaded {} peers from cache (version: {})", cachedPeers.size(), currentPeerListVersion);
+            log.info("Loaded {} peers from cache (version: {})",
+                    cachedPeers.size(), currentPeerListVersion);
         } catch (IOException e) {
             log.error("Error loading peer cache: {}", e.getMessage());
             cachedPeers = new ArrayList<>();

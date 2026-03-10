@@ -1,11 +1,13 @@
 package com.atamanahmet.beamlink.nexus.websocket;
 
 import com.atamanahmet.beamlink.nexus.domain.Agent;
-import com.atamanahmet.beamlink.nexus.repository.AgentRepository;
 import com.atamanahmet.beamlink.nexus.domain.enums.AgentState;
+import com.atamanahmet.beamlink.nexus.repository.AgentRepository;
+import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
+import com.atamanahmet.beamlink.nexus.exception.InvalidTokenException;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.stereotype.Component;
@@ -13,14 +15,14 @@ import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 
 import java.util.Map;
-import java.util.Optional;
+import java.util.UUID;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AgentHandshakeInterceptor implements HandshakeInterceptor {
 
-    private final Logger log = LoggerFactory.getLogger(AgentHandshakeInterceptor.class);
-
+    private final AgentTokenService agentTokenService;
     private final AgentRepository agentRepository;
 
     public static final String AGENT_ID_ATTR = "agentId";
@@ -35,27 +37,35 @@ public class AgentHandshakeInterceptor implements HandshakeInterceptor {
         String token = request.getHeaders().getFirst("X-Auth-Token");
 
         if (token == null || token.isBlank()) {
-            log.warn("WS handshake rejected — missing X-Auth-Token");
+            log.warn("WS handshake rejected, missing X-Auth-Token");
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
             return false;
         }
 
-        Optional<Agent> agentOpt = agentRepository.findByAuthToken(token);
-
-        if (agentOpt.isEmpty()) {
-            log.warn("WS handshake rejected - unknown token");
+        UUID agentId;
+        try {
+            agentId = agentTokenService.extractAgentId(token);
+        } catch (InvalidTokenException e) {
+            log.warn("WS handshake rejected, invalid token: {}", e.getMessage());
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
             return false;
         }
 
-        Agent agent = agentOpt.get();
+        Agent agent = agentRepository.findById(agentId).orElse(null);
+        if (agent == null) {
+            log.warn("WS handshake rejected, unknown agent: {}", agentId);
+            response.setStatusCode(HttpStatus.UNAUTHORIZED);
+            return false;
+        }
 
         if (agent.getState() != AgentState.APPROVED) {
-            log.warn("WS handshake rejected  -agent {} not approved", agent.getId());
+            log.warn("WS handshake rejected, agent {} not approved", agentId);
+            response.setStatusCode(HttpStatus.FORBIDDEN);
             return false;
         }
 
-        attributes.put(AGENT_ID_ATTR, agent.getId());
-
-        log.info("WS handshake accepted for agent {}", agent.getId());
+        attributes.put(AGENT_ID_ATTR, agentId);
+        log.info("WS handshake accepted for agent {}", agentId);
         return true;
     }
 

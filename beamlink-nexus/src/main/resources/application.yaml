@@ -17,7 +17,7 @@ spring:
     password: ${DB_PASSWORD}
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: create-drop
     show-sql: false
     database-platform: org.hibernate.dialect.PostgreSQLDialect
 
@@ -35,6 +35,9 @@ nexus:
     directory: ./received_files
   jwt:
     secret: ${NEXUS_JWT_SECRET}
+    admin-expiration-minutes: ${NEXUS_JWT_ADMIN_EXPIRATION_MINUTES}
+    agent-auth-expiration-days: ${NEXUS_JWT_AGENT_AUTH_EXPIRATION_DAYS}
+    agent-public-expiration-days: ${NEXUS_JWT_AGENT_PUBLIC_EXPIRATION_DAYS}
   cors:
     static-origins: http://localhost:5173
   admin:

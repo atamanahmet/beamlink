@@ -1,13 +1,22 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import axios, { type AxiosInstance } from "axios";
 
+interface AgentIdentity {
+  agentId: string;
+  agentName: string;
+  state: string;
+  publicToken: string;
+  authToken: string;
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
+  identity: AgentIdentity | null;
   publicToken: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  refreshIdentity: () => Promise<void>;
+  refreshIdentity: () => Promise<string | null>;
   apiClient: AxiosInstance;
 }
 
@@ -20,24 +29,43 @@ const apiClient = axios.create({
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [publicToken, setPublicToken] = useState<string | null>(null);
+  const [identity, setIdentity] = useState<AgentIdentity | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const applyIdentity = (data: AgentIdentity | null) => {
+    if (data && !data.publicToken) {
+      data = { ...data, publicToken: null as any };
+    }
+    setIdentity(data);
+    setIsAuthenticated(!!data);
+  };
 
   const refreshIdentity = async () => {
     try {
       const response = await apiClient.get("/auth/me");
-      setPublicToken(response.data.publicToken);
-      setIsAuthenticated(!!response.data.publicToken);
-      return response.data.publicToken;
+      applyIdentity(response.data);
+      return response.data.publicToken ?? null;
     } catch {
-      setPublicToken(null);
-      setIsAuthenticated(false);
+      applyIdentity(null);
       return null;
     } finally {
       setIsLoading(false);
     }
   };
+
+  // SSE
+  useEffect(() => {
+    const es = new EventSource("/api/agent/events");
+
+    es.addEventListener("identity_updated", (e) => {
+      const data = JSON.parse(e.data) as AgentIdentity;
+      applyIdentity(data);
+    });
+
+    es.onerror = () => es.close();
+    return () => es.close();
+  }, []);
 
   useEffect(() => {
     refreshIdentity();
@@ -49,11 +77,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         username: username.trim(),
         password,
       });
-      if (response.data.publicToken == null) {
-        console.log("Public token null issues. Check logic");
-      }
-      setPublicToken(response.data.publicToken);
-      setIsAuthenticated(true);
+      applyIdentity(response.data);
     } catch {
       throw new Error("Invalid credentials");
     }
@@ -61,8 +85,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = async () => {
     await apiClient.post("/auth/logout");
-    setPublicToken(null);
-    setIsAuthenticated(false);
+    applyIdentity(null);
   };
 
   return (
@@ -70,10 +93,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       value={{
         isAuthenticated,
         isLoading,
+        identity,
+        publicToken: identity?.publicToken ?? null,
         login,
         logout,
         apiClient,
-        publicToken,
         refreshIdentity,
       }}
     >

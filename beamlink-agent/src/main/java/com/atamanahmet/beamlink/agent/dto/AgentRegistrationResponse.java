@@ -11,6 +11,4 @@ import java.util.UUID;
 public class AgentRegistrationResponse {
     private UUID agentId;
     private AgentState agentState;
-    private String authToken;
-    private String publicToken;
 }

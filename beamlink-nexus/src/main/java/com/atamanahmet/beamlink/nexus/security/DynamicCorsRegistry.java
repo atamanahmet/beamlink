@@ -16,7 +16,6 @@ public class DynamicCorsRegistry {
     private final Set<String> allowedOrigins = ConcurrentHashMap.newKeySet();
 
     public DynamicCorsRegistry(@Value("${nexus.cors.static-origins:}") String staticOrigins) {
-        // Seed from config if provided, not required, devonly later ui will be static
         if (staticOrigins != null && !staticOrigins.isBlank()) {
             Arrays.stream(staticOrigins.split(","))
                     .map(String::trim)

@@ -3,20 +3,11 @@ package com.atamanahmet.beamlink.nexus.controller;
 import com.atamanahmet.beamlink.nexus.config.NexusConfig;
 import com.atamanahmet.beamlink.nexus.domain.Agent;
 import com.atamanahmet.beamlink.nexus.dto.AgentDTO;
-import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
 import com.atamanahmet.beamlink.nexus.service.AgentService;
 import com.atamanahmet.beamlink.nexus.service.PeerListService;
-
 import lombok.RequiredArgsConstructor;
-
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.List;
@@ -24,9 +15,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Provides peer list to agents
- */
 @RestController
 @RequestMapping("/api/nexus/peers")
 @RequiredArgsConstructor
@@ -36,36 +24,22 @@ public class PeerController {
         private final AgentService agentService;
         private final NexusConfig nexusConfig;
 
-        private final AgentTokenService agentTokenService;
+        private static final UUID NEXUS_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+        private static final UUID NEXUS_PUBLIC_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
         /**
          * Get list of online agents (excluding requesting agent)
          */
         @GetMapping("/online")
         public ResponseEntity<List<AgentDTO>> getOnlinePeers(
-                        @RequestParam(required = false) String excludeAgentId,
-                        @RequestHeader("X-Auth-Token") String token) {
-
-                UUID excludeId = null;
-
-                if (excludeAgentId != null && !excludeAgentId.equalsIgnoreCase("null")) {
-                        excludeId = UUID.fromString(excludeAgentId);
-                }
-
-                UUID agentId = agentTokenService.extractAgentId(token);
-
-                System.out.println(agentId);
-
-                final UUID finalExcludeId = excludeId;
+                @RequestParam(required = false) UUID excludeAgentId) {
 
                 List<AgentDTO> peers = agentService.getOnlineAgents().stream()
-                                .filter(agent -> !agent.getId().equals(finalExcludeId)) // Don't show self
-                                .map(agentService::toDTO)
-                                .collect(Collectors.toList());
+                        .filter(agent -> !agent.getId().equals(excludeAgentId))
+                        .map(agentService::toDTO)
+                        .collect(Collectors.toList());
 
-                return ResponseEntity
-                                .status(HttpStatus.OK)
-                                .body(peers);
+                return ResponseEntity.ok(peers);
         }
 
         /**
@@ -73,35 +47,20 @@ public class PeerController {
          */
         @GetMapping
         public ResponseEntity<Map<String, Object>> getAllPeers(
-                        @RequestParam(required = false) UUID excludeAgentId) {
+                @RequestParam(required = false) UUID excludeAgentId) {
 
                 List<AgentDTO> allAgents = agentService.getAllAgents().stream()
-                                .filter(agent -> !agent.getId().equals(excludeAgentId))
-                                .map(agentService::toDTO)
-                                .collect(Collectors.toList());
+                        .filter(agent -> !agent.getId().equals(excludeAgentId))
+                        .map(agentService::toDTO)
+                        .collect(Collectors.toList());
 
-                UUID nexusId = UUID.fromString("00000000-0000-0000-0000-000000000000");
-                String nexusName = "Nexus";
-
-                String nexusPublicToken = agentTokenService.generatePublicToken(nexusId, nexusName);
-
-                AgentDTO nexusPeer = AgentDTO.builder()
-                                .id(nexusId)
-                                .agentName(nexusName)
-                                .ipAddress(nexusConfig.getIpAddress())
-                                .port(nexusConfig.getNexusPort())
-                                .publicToken(nexusPublicToken)
-                                .online(true)
-                                .build();
-
-                allAgents.add(0, nexusPeer); // put Nexus first in list
+                allAgents.add(0, buildNexusPeer());
 
                 Map<String, Object> response = new HashMap<>();
-
                 response.put("peers", allAgents);
                 response.put("version", peerListService.getCurrentVersion());
 
-                return ResponseEntity.status(HttpStatus.OK).body(response);
+                return ResponseEntity.ok(response);
         }
 
         /**
@@ -109,28 +68,28 @@ public class PeerController {
          */
         @GetMapping("/{agentId}/address")
         public ResponseEntity<Map<String, Object>> getAgentAddress(@PathVariable UUID agentId) {
-
                 Agent agent = agentService.findByAgentId(agentId);
 
                 Map<String, Object> response = new HashMap<>();
-
                 response.put("ip", agent.getIpAddress());
                 response.put("port", agent.getPort());
 
-                return ResponseEntity
-                                .status(HttpStatus.OK)
-                                .body(response);
+                return ResponseEntity.ok(response);
         }
 
         @GetMapping("/version")
         public ResponseEntity<Map<String, Long>> getPeerListVersion() {
+                return ResponseEntity.ok(Map.of("version", peerListService.getCurrentVersion()));
+        }
 
-                Map<String, Long> response = new HashMap<>();
-
-                response.put("version", peerListService.getCurrentVersion());
-
-                return ResponseEntity
-                                .status(HttpStatus.OK)
-                                .body(response);
+        private AgentDTO buildNexusPeer() {
+                return AgentDTO.builder()
+                        .id(NEXUS_ID)
+                        .agentName(nexusConfig.getName())
+                        .ipAddress(nexusConfig.getIpAddress())
+                        .port(nexusConfig.getNexusPort())
+                        .publicId(NEXUS_PUBLIC_ID)
+                        .online(true)
+                        .build();
         }
 }

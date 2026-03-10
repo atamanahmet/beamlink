@@ -6,11 +6,11 @@ import lombok.*;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
+
 @Entity
-@Table(name = "registered_agents", uniqueConstraints = @UniqueConstraint(columnNames = { "ip_address", "port" }))
+@Table(name = "registered_agents", uniqueConstraints = @UniqueConstraint(columnNames = {"ip_address", "port"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -24,8 +24,6 @@ public class Agent {
 
     private String name;
 
-    private String approvedName;
-
     private String ipAddress;
 
     private int port;
@@ -34,16 +32,12 @@ public class Agent {
     @Column(nullable = false)
     private AgentState state;
 
-    @Column(length = 512)
-    private String authToken;
+    @Column(name = "public_id", unique = true)
+    private UUID publicId;
 
-    @Column(length = 512)
-    private String publicToken;
+    private String requestedName;
 
     private Instant registeredAt;
-
-    @Column(nullable = true)
-    private String requestedName;
 
     private Instant approvedAt;
 
@@ -53,12 +47,8 @@ public class Agent {
     @Builder.Default
     private boolean approvalPushed = false;
 
-    @Builder.Default
-    private List<String> extraOrigins = null;
-
     public boolean isOnline() {
-        if (lastSeenAt == null)
-            return false;
+        if (lastSeenAt == null) return false;
         return lastSeenAt.isAfter(Instant.now().minus(Duration.ofMinutes(2)));
     }
 }

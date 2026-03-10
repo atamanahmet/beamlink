@@ -1,5 +1,6 @@
 package com.atamanahmet.beamlink.agent.service;
 
+import com.atamanahmet.beamlink.agent.domain.Agent;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
@@ -33,6 +34,10 @@ public class AgentAuthService {
         } catch (JWTVerificationException e) {
             return false;
         }
+    }
+
+    public Agent getAgent() {
+        return agentService.getAgent();
     }
 
     public String getPublicToken(){

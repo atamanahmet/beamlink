@@ -5,5 +5,5 @@ import com.atamanahmet.beamlink.nexus.domain.enums.AgentState;
 
 import java.util.UUID;
 
-public record AgentRegistrationResponse(UUID agentId, AgentState agentState, String authToken , String publicToken) {
+public record AgentRegistrationResponse(UUID agentId, AgentState agentState) {
 }

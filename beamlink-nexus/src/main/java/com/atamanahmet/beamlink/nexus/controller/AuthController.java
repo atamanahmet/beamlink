@@ -1,65 +1,58 @@
 package com.atamanahmet.beamlink.nexus.controller;
 
+import com.atamanahmet.beamlink.nexus.config.JwtConfig;
+import com.atamanahmet.beamlink.nexus.config.NexusConfig;
 import com.atamanahmet.beamlink.nexus.dto.LoginRequest;
 import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 
-import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import org.springframework.beans.factory.annotation.Value;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/nexus/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final Logger log = LoggerFactory.getLogger(AuthController.class);
-
     private final AgentTokenService agentTokenService;
+    private final PasswordEncoder passwordEncoder;
+    private final NexusConfig nexusConfig;
+    private final JwtConfig jwtConfig;
 
-    @Value("${nexus.admin.username}")
-    private String adminUsername;
+    private static final UUID NEXUS_PUBLIC_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
-    @Value("${nexus.admin.password}")
-    private String adminPassword;
+
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request, HttpServletResponse response) {
-
         log.info("Login attempt for user: {}", request.username());
 
-        if (!request.username().equals(adminUsername) ||
-                !request.password().equals(adminPassword)) {
-
-            return ResponseEntity
-                    .status(HttpStatus.UNAUTHORIZED)
-                    .body("Invalid credentials");
+        if (!request.username().equals(nexusConfig.getAdminUsername()) ||
+                !passwordEncoder.matches(request.password(), passwordEncoder.encode(nexusConfig.getAdminPassword()))) {
+            log.warn("Failed login attempt for user: {}", request.username());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials");
         }
 
         String token = agentTokenService.generateAdminToken(request.username());
 
-        // TODO: set secure https
         Cookie cookie = new Cookie("nexus_token", token);
         cookie.setHttpOnly(true);
         cookie.setSecure(false);
         cookie.setPath("/");
-        cookie.setMaxAge(60 * 60 * 8); // 8 hours
+        cookie.setMaxAge((int) (jwtConfig.getAdminExpirationMinutes() * 60));
 
         response.addCookie(cookie);
 
@@ -73,18 +66,21 @@ public class AuthController {
         Cookie cookie = new Cookie("nexus_token", "");
         cookie.setHttpOnly(true);
         cookie.setPath("/");
-        cookie.setMaxAge(0); // delete it
+        cookie.setMaxAge(0);
         response.addCookie(cookie);
-        return ResponseEntity.ok().build();
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .build();
     }
 
+    /**
+     * Returns Nexus public identity for agent's peerlist
+     */
     @GetMapping("/identity")
     public ResponseEntity<Map<String, Object>> getNexusIdentity() {
 
-        String token = agentTokenService.generatePublicToken(UUID.fromString("00000000-0000-0000-0000-000000000000"),
-                "Nexus");
-
-        return ResponseEntity.ok(Map.of(
-                "publicToken", token));
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(Map.of("publicId", NEXUS_PUBLIC_ID));
     }
 }

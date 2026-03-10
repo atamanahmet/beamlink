@@ -6,7 +6,9 @@ import com.atamanahmet.beamlink.agent.domain.AgentState;
 import com.atamanahmet.beamlink.agent.dto.AgentIdentityResponse;
 import com.atamanahmet.beamlink.agent.dto.AgentStatusDTO;
 import com.atamanahmet.beamlink.agent.dto.ApprovalPushRequest;
-import com.atamanahmet.beamlink.agent.event.AgentApprovedEvent;import com.google.gson.Gson;
+import com.atamanahmet.beamlink.agent.event.AgentApprovedEvent;
+import com.atamanahmet.beamlink.agent.event.AgentIdentityChangedEvent;
+import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
@@ -20,6 +22,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -28,13 +31,16 @@ public class AgentService {
 
     private final Logger log = LoggerFactory.getLogger(AgentService.class);
 
-    private static final String INFO_FILE = "agent_info.json";
-    private static final String INFO_FILE_TMP = "agent_info.json.tmp";
-
     private final AgentConfig config;
     private final LogService logService;
     private final PeerCacheService peerCacheService;
     private final ApplicationEventPublisher eventPublisher;
+
+    @Value("${agent.info-file:agent_info.json}")
+    private String infoFilePath;
+
+    @Value("${agent.info-file-tmp:agent_info.json.tmp}")
+    private String infoFileTmpPath;
 
     @Value("${server.port}")
     private int SERVER_PORT;
@@ -51,7 +57,7 @@ public class AgentService {
 
     @PostConstruct
     public void init() {
-        File file = new File(INFO_FILE);
+        File file = new File(infoFilePath);
         if (file.exists()) {
             loadFromFile(file);
         } else {
@@ -92,8 +98,8 @@ public class AgentService {
      */
     private synchronized void saveToFile() {
         try {
-            Path tmp    = Path.of(INFO_FILE_TMP);
-            Path target = Path.of(INFO_FILE);
+            Path tmp    = Path.of(infoFileTmpPath);
+            Path target = Path.of(infoFilePath);
             Files.writeString(tmp, gson.toJson(agent));
             Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
@@ -109,6 +115,13 @@ public class AgentService {
             log.warn("Ignoring invalid state transition {} -> {}", current, newState);
             return;
         }
+
+        if (newState == AgentState.PENDING_APPROVAL) {
+            agent.setAuthToken(null);
+            agent.setPublicToken(null);
+            log.debug("Tokens cleared on transition to PENDING_APPROVAL.");
+        }
+
         log.info("Agent state: {} -> {}", current, newState);
         agent.setState(newState);
         saveToFile();
@@ -142,6 +155,7 @@ public class AgentService {
      * Called when nexus pushes approval to this agent.
      */
     public synchronized void applyNexusIdentity(ApprovalPushRequest request) {
+
         agent.setId(request.getAgentId());
         agent.setAgentName(request.getApprovedName());
         agent.setAuthToken(request.getAuthToken());
@@ -153,16 +167,39 @@ public class AgentService {
         eventPublisher.publishEvent(new AgentApprovedEvent(this));
     }
 
+    // Tokens can be null before approval
     public synchronized void applyNexusIdentity(AgentIdentityResponse response) {
+        boolean wasAlreadyApproved = agent.getState() == AgentState.APPROVED
+                && agent.getId() != null
+                && agent.getId().equals(response.getAgentId());
+
+        boolean identityChanged = !response.getAgentId().equals(agent.getId())
+                || !response.getAgentName().equals(agent.getAgentName())
+                || !Objects.equals(response.getAuthToken(), agent.getAuthToken())
+                || !Objects.equals(response.getPublicToken(), agent.getPublicToken())
+                || response.getState() != agent.getState();
+
+        log.info("✓ Identity applied. Name={}, Id={}, hasPublicToken={}, hasAuthToken={}, changed={}",
+                agent.getAgentName(), agent.getId(),
+                agent.getPublicToken() != null,
+                agent.getAuthToken() != null,
+                identityChanged);
+
         agent.setId(response.getAgentId());
         agent.setAgentName(response.getAgentName());
         agent.setAuthToken(response.getAuthToken());
         agent.setPublicToken(response.getPublicToken());
         agent.setState(response.getState());
         saveToFile();
-        log.info("✓ Agent approved. Name={}, Id={}", agent.getAgentName(),agent.getId());
+        log.info("✓ Identity applied. Name={}, Id={}, changed={}",
+                agent.getAgentName(), agent.getId(), identityChanged);
 
-        eventPublisher.publishEvent(new AgentApprovedEvent(this));
+        if (!wasAlreadyApproved && response.getState() == AgentState.APPROVED) {
+            eventPublisher.publishEvent(new AgentApprovedEvent(this));
+        } else if (identityChanged) {
+            // Only broadcast to UI, don't reconnect WS
+            eventPublisher.publishEvent(new AgentIdentityChangedEvent(this));
+        }
     }
 
 
