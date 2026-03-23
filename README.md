@@ -5,13 +5,12 @@ Beamlink is a simple agent-based network for sending files locally. Agents commu
 ## Prerequisites
 
 - **Java 17+ JVM** - [Amazon Corretto](https://aws.amazon.com/corretto/) recommended
-- **Docker Desktop** - required for Nexus only. [Download here](https://www.docker.com/products/docker-desktop)
 
 ## How it works
 
 **Agent**
 
-- Windows-only, runs with launcher.bat
+- Runs with launcher.bat
 
 - Registers with Nexus and gets an auth token
 
@@ -27,9 +26,7 @@ Beamlink is a simple agent-based network for sending files locally. Agents commu
 
 **Nexus**
 
-- Requires [Docker Desktop](https://www.docker.com/products/docker-desktop) for database storage
-
-- Windows-only, runs with launcher.bat
+- Runs with launcher.bat
 
 - Tracks agents, peer lists, logs, and push updates
 
@@ -43,7 +40,7 @@ Beamlink is a simple agent-based network for sending files locally. Agents commu
 
 - Install [Java 17+ JVM](https://aws.amazon.com/corretto/)
 
-- Download adn extract **beamlink-agent-0.0.1.rar**
+- Download adn extract **beamlink-agent-0.0.1-pre1.zip**
 
 - Run **launcher.bat**
 
@@ -53,9 +50,7 @@ Beamlink is a simple agent-based network for sending files locally. Agents commu
 
 - Install [Java 17+ JVM](https://aws.amazon.com/corretto/)
 
-- Install [Docker Desktop](https://www.docker.com/products/docker-desktop)
-
-- Download and extract **beamlink-nexus-0.0.1.rar**
+- Download and extract **beamlink-nexus-0.0.1-pre1.zip**
 
 - Run **launcher.bat**
 
