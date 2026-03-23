@@ -52,7 +52,7 @@ public class PeerController {
     }
 
     /**
-     * Refresh peer list from admin
+     * Refresh peer list from nexus
      */
     @PostMapping("/refresh")
     public ResponseEntity<List<Peer>> refreshPeers() {
