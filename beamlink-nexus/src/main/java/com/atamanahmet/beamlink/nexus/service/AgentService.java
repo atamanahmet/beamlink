@@ -15,6 +15,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -216,9 +218,20 @@ public class AgentService {
         String publicToken = agentTokenService.generatePublicToken(savedAgent.getId(), publicId);
         peerListService.incrementVersion();
 
-        eventPublisher.publishEvent(new AgentApprovedEvent(savedAgent, authToken, publicToken));
+//        eventPublisher.publishEvent(new AgentApprovedEvent(savedAgent, authToken, publicToken));
 
         log.info("Agent approved: {}", savedAgent.getId());
+
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        eventPublisher.publishEvent(
+                                new AgentApprovedEvent(savedAgent, authToken, publicToken)
+                        );
+                    }
+                }
+        );
     }
 
     /**
@@ -284,9 +297,17 @@ public class AgentService {
         Agent savedAgent = agentRepository.save(agent);
 
         peerListService.incrementVersion();
-        agentPushService.pushRename(savedAgent);
 
         log.info("Rename approved for agent {}", agentId);
+
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        agentPushService.pushRename(savedAgent);
+                    }
+                }
+        );
     }
 
     /**

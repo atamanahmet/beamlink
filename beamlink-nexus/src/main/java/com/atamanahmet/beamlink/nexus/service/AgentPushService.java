@@ -10,6 +10,7 @@ import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
 import com.atamanahmet.beamlink.nexus.websocket.AgentWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -149,7 +150,7 @@ public class AgentPushService {
         return "http://" + agent.getIpAddress() + ":" + agent.getPort() + path;
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onAgentApproved(AgentApprovedEvent event) {
         pushApproval(event.agent(), event.authToken(), event.publicToken());

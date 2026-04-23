@@ -91,6 +91,8 @@ public class FileController {
             @RequestParam(value = "fromAgent", required = false) UUID fromAgentId,
             @RequestParam(value = "fromName", required = false) String fromName) throws Exception {
 
+         log.info("Upload controller reached - filename: {}", file.getOriginalFilename());
+
         Map<String, Object> response = new HashMap<>();
 
         // Validate file exists
