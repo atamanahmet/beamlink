@@ -4,6 +4,7 @@ import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 
 import { transferEvents } from "../services/event/event";
+import { useData } from "../context/DataContext";
 
 interface Peer {
   id: string;
@@ -15,11 +16,16 @@ interface Peer {
 }
 
 interface FileUploadProps {
-  onUploadStateChange: (isUploading: boolean) => void;
+  onUploadingChange?: (uploading: boolean) => void;
+  onTransferStarted: () => void;
 }
 
-export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
+export const FileUpload = ({
+  onTransferStarted,
+  onUploadingChange,
+}: FileUploadProps) => {
   const { apiClient } = useAuth();
+  const { initiateTransfer } = useData();
 
   const [nexusToken, setNexusToken] = useState<string>("");
 
@@ -46,6 +52,9 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [peers, setPeers] = useState<Peer[]>([]);
   const [selectedPeer, setSelectedPeer] = useState("");
+  const [filePath, setFilePath] = useState("");
+  const [pathError, setPathError] = useState("");
+  const [isPathSending, setIsPathSending] = useState(false);
 
   const selectedPeerObject = peers.find((p) => p.id === selectedPeer);
   const isSelectedPeerOffline =
@@ -54,7 +63,7 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
   // Wrapper to update both internal state and parent
   const setIsUploading = (uploading: boolean) => {
     setIsUploadingInternal(uploading);
-    onUploadStateChange(uploading);
+    onUploadingChange?.(uploading);
   };
 
   useEffect(() => {
@@ -294,6 +303,61 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
     }
   };
 
+  const normalizePath = (input: string | null | undefined): string => {
+    if (!input) return "";
+
+    return input
+      .trim()
+      .replace(/^"+|"+$/g, "")
+      .replace(/\\/g, "/");
+  };
+
+  const sendByPath = async () => {
+    if (!filePath.trim()) {
+      setPathError("Enter a file path");
+      return;
+    }
+    if (!selectedPeer) {
+      setPathError("Select a destination first");
+      return;
+    }
+    const peer = peers.find((p) => p.id === selectedPeer);
+    if (!peer) {
+      setPathError("Selected peer not found");
+      return;
+    }
+    if (!peer.online) {
+      setPathError("Selected peer is offline");
+      return;
+    }
+
+    setPathError("");
+    setIsPathSending(true);
+
+    const cleanedPath = normalizePath(filePath);
+
+    try {
+      await initiateTransfer({
+        filePath: cleanedPath,
+        targetAgentId: peer.id,
+        targetIp: peer.ipAddress,
+        targetPort: peer.port,
+        targetToken: null,
+      });
+      setFilePath("");
+      setPathError("");
+      onTransferStarted();
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to start transfer";
+      setPathError(`❌ ${msg}`);
+    } finally {
+      setIsPathSending(false);
+    }
+  };
+
   const handleCancel = () => {
     if (abortController) {
       abortController.abort();
@@ -369,6 +433,33 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
           )}
         </div>
 
+        <div className="mb-6">
+          <label className="block text-orange-300 text-sm mb-2 font-medium">
+            Send by File Path
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={filePath}
+              onChange={(e) => setFilePath(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendByPath()}
+              placeholder="C:\Users\you\file.txt or /home/you/file.txt"
+              disabled={isPathSending}
+              className="flex-1 bg-black/60 border border-orange-800 rounded-lg px-4 py-3 text-orange-100 placeholder-orange-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all disabled:opacity-50 font-mono text-sm"
+            />
+            <button
+              onClick={sendByPath}
+              disabled={isPathSending || !filePath.trim() || !selectedPeer}
+              className="px-5 py-3 bg-orange-700 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-all font-medium"
+            >
+              {isPathSending ? "Sending..." : "Send"}
+            </button>
+          </div>
+          {pathError && (
+            <p className="text-red-400 text-sm mt-2">{pathError}</p>
+          )}
+        </div>
+
         {/* Drop Zone */}
         <div
           {...getRootProps()}
@@ -387,6 +478,11 @@ export const FileUpload = ({ onUploadStateChange }: FileUploadProps) => {
           `}
         >
           <input {...getInputProps()} />
+
+          <div className="w-full mb-2 px-3 py-2 bg-orange-950/60 border border-orange-700/50 rounded-lg text-orange-400 text-xs text-center">
+            ⚠ Drag & drop sends via old multipart method. For chunked transfer
+            with resume support, use the path input above.
+          </div>
 
           <div className="mb-4">
             <svg

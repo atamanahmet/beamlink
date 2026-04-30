@@ -1,6 +1,33 @@
 import { createContext, useContext } from "react";
 import { useAuth } from "./AuthContext";
 
+interface TransferStatusResponse {
+  transferId: string;
+  status:
+    | "PENDING"
+    | "ACTIVE"
+    | "PAUSED"
+    | "COMPLETED"
+    | "CANCELLED"
+    | "FAILED"
+    | "EXPIRED";
+  confirmedOffset: number;
+  fileSize: number;
+  fileName: string;
+  failureReason: string | null;
+  targetAgentId: string;
+  createdAt: string;
+  lastChunkAt: string | null;
+}
+
+interface InitiateTransferRequest {
+  filePath: string;
+  targetAgentId: string;
+  targetIp: string;
+  targetPort: number;
+  targetToken: string | null;
+}
+
 interface UploadResponse {
   success: boolean;
   message: string;
@@ -27,12 +54,35 @@ interface DataContextType {
   ) => Promise<UploadResponse>;
   getTransferLogs: () => Promise<any>;
   getRecentTransferLogs: (limit?: number) => Promise<any>;
+  initiateTransfer: (
+    req: InitiateTransferRequest,
+  ) => Promise<{ transferId: string }>;
+  resumeTransfer: (transferId: string) => Promise<void>;
+  cancelTransfer: (transferId: string) => Promise<void>;
+  getTransferStatus: (transferId: string) => Promise<TransferStatusResponse>;
+  getAllTransfers: () => Promise<TransferStatusResponse[]>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider = ({ children }: { children: React.ReactNode }) => {
   const { apiClient } = useAuth();
+
+  const initiateTransfer = async (req: InitiateTransferRequest) =>
+    (await apiClient.post("/transfers", req)).data;
+
+  const resumeTransfer = async (transferId: string): Promise<void> => {
+    await apiClient.post(`/transfers/${transferId}/resume`);
+  };
+
+  const cancelTransfer = async (transferId: string): Promise<void> => {
+    await apiClient.delete(`/transfers/${transferId}`);
+  };
+
+  const getTransferStatus = async (transferId: string) =>
+    (await apiClient.get(`/transfers/${transferId}/status`)).data;
+
+  const getAllTransfers = async () => (await apiClient.get("/transfers")).data;
 
   const checkStatus = async (): Promise<StatusResponse> =>
     (await apiClient.get("/status")).data;
@@ -76,6 +126,11 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
         uploadFile,
         getTransferLogs,
         getRecentTransferLogs,
+        initiateTransfer,
+        resumeTransfer,
+        cancelTransfer,
+        getTransferStatus,
+        getAllTransfers,
       }}
     >
       {children}

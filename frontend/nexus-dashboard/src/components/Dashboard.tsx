@@ -1,18 +1,31 @@
-import { useState } from "react";
-import { LogOut, Upload, LayoutDashboard, RefreshCw } from "lucide-react";
+import { useState, useEffect } from "react";
+import {
+  LogOut,
+  Upload,
+  LayoutDashboard,
+  RefreshCw,
+  FolderOpen,
+} from "lucide-react";
 import { FileUpload } from "./FileUpload";
 import { DashboardView } from "./DashboardView";
 import WarpBackground from "./WarpBackground";
 import { useAuth } from "../context/AuthContext";
 import { UpdateView } from "./UpdateView";
+import { TransferView } from "./TransferView";
+import { transferEvents } from "../services/event/event";
 
 export const Dashboard = () => {
   const [activeView, setActiveView] = useState<
-    "upload" | "dashboard" | "update"
+    "upload" | "dashboard" | "update" | "transfers"
   >("upload");
   const [isUploading, setIsUploading] = useState(false);
 
   const { logout } = useAuth();
+
+  useEffect(() => {
+    const unsub = transferEvents.subscribe(() => setIsUploading(true));
+    return () => unsub();
+  }, []);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-linear-to-br from-[#1a0f0a] via-[#3b1f12] to-black">
@@ -51,6 +64,17 @@ export const Dashboard = () => {
                 Dashboard
               </button>
               <button
+                onClick={() => setActiveView("transfers")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer ${
+                  activeView === "transfers"
+                    ? "bg-orange-600 text-white"
+                    : "bg-orange-900/30 border border-orange-700 text-orange-300 hover:bg-orange-900/50"
+                }`}
+              >
+                <FolderOpen className="w-4 h-4" />
+                Transfers
+              </button>
+              <button
                 onClick={() => setActiveView("update")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer ${
                   activeView === "update"
@@ -74,11 +98,17 @@ export const Dashboard = () => {
 
           {/* Content */}
           {activeView === "upload" && (
-            <FileUpload onUploadStateChange={setIsUploading} />
+            <FileUpload
+              onUploadingChange={setIsUploading}
+              onTransferStarted={() => setActiveView("transfers")}
+            />
           )}
 
           {activeView === "dashboard" && <DashboardView />}
           {activeView === "update" && <UpdateView />}
+          {activeView === "transfers" && (
+            <TransferView onUploadingChange={setIsUploading} />
+          )}
         </div>
       </div>
     </div>

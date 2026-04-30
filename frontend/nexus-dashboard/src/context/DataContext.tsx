@@ -13,7 +13,18 @@ interface DataContextType {
   approveRename: (id: string) => Promise<any>;
   rejectRename: (id: string) => Promise<any>;
   getTransferLogs: () => Promise<any>;
+  deleteTransfer: (transferId: string) => Promise<void>;
   getRecentTransferLogs: (limit?: number) => Promise<any>;
+  initiateTransfer: (req: {
+    filePath: string;
+    targetAgentId: string;
+    targetIp: string;
+    targetPort: number;
+    targetToken: string | null;
+  }) => Promise<{ transferId: string }>;
+  resumeTransfer: (transferId: string) => Promise<void>;
+  cancelTransfer: (transferId: string) => Promise<void>;
+  getAllTransfers: () => Promise<any[]>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -42,6 +53,28 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
   const getTransferLogsFn = async () => (await apiClient.get("/logs")).data;
   const getRecentTransferLogsFn = async (limit = 50) =>
     (await apiClient.get(`/logs/recent?limit=${limit}`)).data;
+  const deleteTransferFn = async (transferId: string): Promise<void> => {
+    await apiClient.delete(`/transfers/${transferId}/delete`);
+  };
+
+  const initiateTransferFn = async (req: {
+    filePath: string;
+    targetAgentId: string;
+    targetIp: string;
+    targetPort: number;
+    targetToken: string | null;
+  }) => (await apiClient.post("/transfers", req)).data;
+
+  const resumeTransferFn = async (transferId: string): Promise<void> => {
+    await apiClient.post(`/transfers/${transferId}/resume`);
+  };
+
+  const cancelTransferFn = async (transferId: string): Promise<void> => {
+    await apiClient.delete(`/transfers/${transferId}`);
+  };
+
+  const getAllTransfersFn = async () =>
+    (await apiClient.get("/transfers")).data;
 
   return (
     <DataContext.Provider
@@ -58,6 +91,11 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
         rejectRename: rejectRenameFn,
         getTransferLogs: getTransferLogsFn,
         getRecentTransferLogs: getRecentTransferLogsFn,
+        initiateTransfer: initiateTransferFn,
+        resumeTransfer: resumeTransferFn,
+        cancelTransfer: cancelTransferFn,
+        getAllTransfers: getAllTransfersFn,
+        deleteTransfer: deleteTransferFn,
       }}
     >
       {children}
