@@ -2,13 +2,17 @@ package com.atamanahmet.beamlink.nexus.websocket;
 
 import com.atamanahmet.beamlink.nexus.config.NexusConfig;
 import com.atamanahmet.beamlink.nexus.domain.Agent;
+import com.atamanahmet.beamlink.nexus.domain.FileTransfer;
+import com.atamanahmet.beamlink.nexus.domain.enums.TransferStatus;
 import com.atamanahmet.beamlink.nexus.dto.AgentDTO;
 import com.atamanahmet.beamlink.nexus.dto.LogSyncRequest;
 import com.atamanahmet.beamlink.nexus.dto.StatusUpdatePayload;
 import com.atamanahmet.beamlink.nexus.dto.WebSocketMessageDTO;
+import com.atamanahmet.beamlink.nexus.repository.FileTransferRepository;
 import com.atamanahmet.beamlink.nexus.service.AgentSessionService;
 import com.atamanahmet.beamlink.nexus.service.PeerListService;
 import com.atamanahmet.beamlink.nexus.service.TransferLogService;
+import com.atamanahmet.beamlink.nexus.service.TransferSenderService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +37,9 @@ public class AgentWebSocketHandler implements WebSocketHandler {
     private final ObjectMapper objectMapper;
     private final NexusConfig nexusConfig;
     private final TransferLogService transferLogService;
+    private final TransferSenderService transferSenderService;
+    private final FileTransferRepository fileTransferRepository;
+
 
     private static final UUID NEXUS_ID = UUID.fromString("00000000-0000-0000-0000-000000000000");
     private static final UUID NEXUS_PUBLIC_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
@@ -45,8 +52,23 @@ public class AgentWebSocketHandler implements WebSocketHandler {
         if (agentId != null) {
             sessions.put(agentId, session);
             log.info("Agent {} connected via WS", agentId);
+            resumePausedTransfers(agentId);
         }
     }
+
+    private void resumePausedTransfers(UUID agentId) {
+        List<FileTransfer> paused = fileTransferRepository
+                .findByTargetAgentIdAndStatus(agentId, TransferStatus.PAUSED);
+        for (FileTransfer t : paused) {
+            log.info("Agent {} reconnected, resuming transfer {}", agentId, t.getTransferId());
+            try {
+                transferSenderService.resume(t.getTransferId());
+            } catch (Exception e) {
+                log.warn("Auto-resume failed for transfer {}: {}", t.getTransferId(), e.getMessage());
+            }
+        }
+    }
+
 
     @Override
     public void handleMessage(WebSocketSession session, WebSocketMessage<?> message) throws Exception {
@@ -143,6 +165,7 @@ public class AgentWebSocketHandler implements WebSocketHandler {
         UUID agentId = getAgentId(session);
         if (agentId != null) {
             sessions.remove(agentId);
+            agentSessionService.markOffline(agentId);
             log.info("Agent {} WS session closed: {}", agentId, closeStatus);
         }
     }

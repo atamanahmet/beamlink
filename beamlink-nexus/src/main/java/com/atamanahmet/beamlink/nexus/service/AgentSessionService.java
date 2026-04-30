@@ -32,6 +32,13 @@ public class AgentSessionService {
         return agentRepository.findByState(AgentState.APPROVED);
     }
 
+    public void markOffline(UUID agentId) {
+        agentRepository.findById(agentId).ifPresent(agent -> {
+            agent.setLastSeenAt(Instant.EPOCH);
+            agentRepository.save(agent);
+        });
+    }
+
     public AgentDTO toDTO(Agent agent) {
         Instant threshold = Instant.now().minus(Duration.ofMinutes(2));
         Instant lastSeen = agent.getLastSeenAt();

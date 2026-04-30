@@ -38,6 +38,38 @@ public class SecurityConfig {
     private static final String AGENT = Role.AGENT.name();
     private static final String AGENT_PUBLIC = Role.AGENT_PUBLIC.name();
 
+    private static final String[] AGENT_TO_AGENT = {
+            "/api/nexus/transfers/receive",
+            "/api/nexus/transfers/*/chunk",
+            "/api/nexus/transfers/*/offset"
+    };
+
+    private static final String[] UNAUTHED_AGENT = {
+            "/api/agents/register",
+            "/api/agents/status",
+            "/api/agents/ping",
+            "/api/agents/identify",
+            "/api/agents/check-approval",
+            "/api/agents/*/exists",
+            "/ws/agents"
+    };
+
+    private static final String[] PUBLIC_ASSETS = {
+            "/",
+            "/index.html",
+            "/assets/**",
+            "/*.js",
+            "/*.css",
+            "/*.svg",
+            "/vite.svg",
+            "/h2-console/**"
+    };
+
+    private static final String[] UPLOAD = {
+            "/api/upload/check",
+            "/api/upload"
+    };
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -48,45 +80,14 @@ public class SecurityConfig {
                 .addFilterBefore(dynamicCorsFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(agentTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        // Static frontend
-                        .requestMatchers(
-                                "/",
-                                "/index.html",
-                                "/assets/**",
-                                "/*.js",
-                                "/*.css",
-                                "/*.svg",
-                                "/vite.svg",
-                                "/h2-console/**"
-                        ).permitAll()
-
-                        // Unauthed Agent endpoints
-                        .requestMatchers(
-                                "/api/agents/register",
-                                "/api/agents/status",
-                                "/api/agents/ping",
-                                "/api/agents/identify",
-                                "/api/agents/check-approval",
-                                "/api/agents/*/exists",
-                                "/ws/agents"
-                        ).permitAll()
-
-                        // Upload, for both auth and public tokens
-                        .requestMatchers(
-                                "/api/upload/check",
-                                "/api/upload"
-                        ).hasAnyRole(AGENT, AGENT_PUBLIC)
-
-                        // Admin login
+                        .requestMatchers(PUBLIC_ASSETS).permitAll()
+                        .requestMatchers(UNAUTHED_AGENT).permitAll()
+                        .requestMatchers(AGENT_TO_AGENT).permitAll()
                         .requestMatchers("/api/nexus/auth/login").permitAll()
-
+                        .requestMatchers(UPLOAD).hasAnyRole(AGENT, AGENT_PUBLIC)
                         .requestMatchers("/api/nexus/peers/**").hasAnyRole(AGENT, AGENT_PUBLIC, ADMIN)
-
                         .requestMatchers("/api/nexus/auth/identity").hasAnyRole(AGENT, ADMIN)
-
-                        // Admin only
                         .requestMatchers("/api/nexus/**").hasRole(ADMIN)
-
                         .anyRequest().authenticated()
                 )
                 .httpBasic(AbstractHttpConfigurer::disable)

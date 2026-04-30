@@ -41,7 +41,10 @@ nexus:
   monitoring:
     interval: 60000
   upload:
-    directory: ./received_files
+    directory: ./data/uploads
+    partial-directory: ./data/partial
+  transfer:
+    expiry-hours: ${TRANSFER_EXPIRY_HOURS:24}
   jwt:
     secret: ${NEXUS_JWT_SECRET}
     admin-expiration-minutes: ${NEXUS_JWT_ADMIN_EXPIRATION_MINUTES}
