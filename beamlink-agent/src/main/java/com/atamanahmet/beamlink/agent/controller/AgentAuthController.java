@@ -3,7 +3,6 @@ package com.atamanahmet.beamlink.agent.controller;
 import com.atamanahmet.beamlink.agent.domain.Agent;
 import com.atamanahmet.beamlink.agent.dto.LoginRequest;
 import com.atamanahmet.beamlink.agent.service.AgentAuthService;
-import com.atamanahmet.beamlink.agent.service.AgentService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

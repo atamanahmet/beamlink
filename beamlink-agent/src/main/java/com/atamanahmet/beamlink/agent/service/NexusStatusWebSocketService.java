@@ -1,6 +1,5 @@
 package com.atamanahmet.beamlink.agent.service;
 
-import com.atamanahmet.beamlink.agent.domain.AgentState;
 import com.atamanahmet.beamlink.agent.domain.TransferLog;
 import com.atamanahmet.beamlink.agent.domain.Peer;
 import com.atamanahmet.beamlink.agent.dto.AgentStatusDTO;
@@ -17,11 +16,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor

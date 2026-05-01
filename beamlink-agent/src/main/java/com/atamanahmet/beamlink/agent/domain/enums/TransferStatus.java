@@ -1,4 +1,4 @@
-package com.atamanahmet.beamlink.agent.domain;
+package com.atamanahmet.beamlink.agent.domain.enums;
 
 public enum TransferStatus {
     PENDING,    // initiated, not yet sending

@@ -1,38 +1,45 @@
 package com.atamanahmet.beamlink.agent.domain;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import lombok.AllArgsConstructor;
+import com.atamanahmet.beamlink.agent.domain.enums.AgentState;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.UUID;
 
-/**
- * Represents agent in the network
- */
+@Entity
+@Table(name = "agent")
 @Getter
 @Setter
-@AllArgsConstructor
 @NoArgsConstructor
-@JsonIgnoreProperties(ignoreUnknown = true)
 public class Agent {
 
-    private UUID id;
+    /* Only one agent per instance */
+    @Id
+    @Column(nullable = false, updatable = false)
+    private Long id = 1L;
 
+    @Column(columnDefinition = "VARCHAR(36)")
+    private UUID agentId;
+
+    @Column(nullable = false)
     private String agentName;
 
+    @Column(nullable = false)
     private String ipAddress;
 
+    @Column(nullable = false)
     private int port;
 
-    private long lastSeen = System.currentTimeMillis();
-
-    private boolean online=true;
-
+    @Column
     private String authToken;
+
+    @Column
     private String publicToken;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private AgentState state = AgentState.UNREGISTERED;
 
     public boolean isApproved() {
@@ -45,11 +52,11 @@ public class Agent {
 
     public Peer toPeer() {
         return new Peer(
-                id,
+                agentId,
                 agentName,
                 ipAddress,
                 port,
-                lastSeen,
+                System.currentTimeMillis(),
                 true,
                 publicToken
         );

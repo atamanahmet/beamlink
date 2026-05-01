@@ -2,7 +2,7 @@ package com.atamanahmet.beamlink.agent.service;
 
 import com.atamanahmet.beamlink.agent.config.AgentConfig;
 import com.atamanahmet.beamlink.agent.domain.FileTransfer;
-import com.atamanahmet.beamlink.agent.domain.TransferStatus;
+import com.atamanahmet.beamlink.agent.domain.enums.TransferStatus;
 import com.atamanahmet.beamlink.agent.dto.InitiateTransferRequest;
 import com.atamanahmet.beamlink.agent.dto.InitiateTransferResponse;
 import com.atamanahmet.beamlink.agent.exception.FileTransferException;
@@ -24,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -50,9 +51,6 @@ public class TransferSenderService {
         String cleanedPath = PathNormalizer.normalize(request.getFilePath());
         Path filePath = Paths.get(cleanedPath);
 
-        if (!Files.exists(filePath) || !Files.isRegularFile(filePath)) {
-            throw new FileTransferException("File not found: " + cleanedPath, null);
-        }
         if (!Files.exists(filePath) || !Files.isRegularFile(filePath)) {
             throw new FileTransferException("File not found: " + cleanedPath, null);
         }
@@ -208,6 +206,34 @@ public class TransferSenderService {
         } catch (IOException | InterruptedException e) {
             throw new FileTransferException("Cannot reach target agent", e);
         }
+    }
+
+    public TransferStatus getStatus(UUID transferId) {
+        return transferRepository.findByTransferId(transferId)
+                .orElseThrow(() -> new FileTransferException(
+                        "Transfer not found: " + transferId, null))
+                .getStatus();
+
+    }public FileTransfer getTransfer(UUID transferId) {
+        return transferRepository.findByTransferId(transferId)
+                .orElseThrow(() -> new FileTransferException(
+                        "Transfer not found: " + transferId, null));
+    }
+
+    public List<FileTransfer> getAll() {
+        return transferRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    @Transactional
+    public void cancel(UUID transferId) {
+        transferRepository.findByTransferId(transferId).ifPresent(transfer -> {
+            if (transfer.getStatus() == TransferStatus.ACTIVE
+                    || transfer.getStatus() == TransferStatus.PAUSED) {
+                transfer.setStatus(TransferStatus.CANCELLED);
+                transferRepository.save(transfer);
+                log.info("Transfer cancelled by user: {}", transferId);
+            }
+        });
     }
 
     /**

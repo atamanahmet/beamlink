@@ -2,7 +2,7 @@ package com.atamanahmet.beamlink.agent.service;
 
 import com.atamanahmet.beamlink.agent.config.AgentConfig;
 import com.atamanahmet.beamlink.agent.domain.Agent;
-import com.atamanahmet.beamlink.agent.domain.AgentState;
+import com.atamanahmet.beamlink.agent.domain.enums.AgentState;
 import com.atamanahmet.beamlink.agent.dto.AgentIdentityResponse;
 import com.atamanahmet.beamlink.agent.dto.AgentRegistrationRequest;
 import com.atamanahmet.beamlink.agent.dto.AgentRegistrationResponse;

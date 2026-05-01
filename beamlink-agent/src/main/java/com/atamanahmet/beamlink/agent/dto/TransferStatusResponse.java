@@ -1,6 +1,6 @@
 package com.atamanahmet.beamlink.agent.dto;
 
-import com.atamanahmet.beamlink.agent.domain.TransferStatus;
+import com.atamanahmet.beamlink.agent.domain.enums.TransferStatus;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 

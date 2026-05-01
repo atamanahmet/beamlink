@@ -1,11 +1,13 @@
 package com.atamanahmet.beamlink.agent.controller;
 
 import com.atamanahmet.beamlink.agent.domain.FileTransfer;
-import com.atamanahmet.beamlink.agent.domain.TransferStatus;
+import com.atamanahmet.beamlink.agent.domain.enums.TransferStatus;
 import com.atamanahmet.beamlink.agent.dto.*;
 import com.atamanahmet.beamlink.agent.exception.FileTransferException;
 import com.atamanahmet.beamlink.agent.repository.FileTransferRepository;
+import com.atamanahmet.beamlink.agent.service.BatchSenderService;
 import com.atamanahmet.beamlink.agent.service.ChunkReceiverService;
+import com.atamanahmet.beamlink.agent.service.DirectorySenderService;
 import com.atamanahmet.beamlink.agent.service.TransferSenderService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +31,8 @@ public class TransferController {
 
     private final TransferSenderService senderService;
     private final ChunkReceiverService receiverService;
-    private final FileTransferRepository transferRepository;
+    private final DirectorySenderService directorySenderService;
+    private final BatchSenderService batchSenderService;
 
     /**
      * User initiates a transfer from the UI.
@@ -53,19 +56,16 @@ public class TransferController {
     public ResponseEntity<TransferStatusResponse> getStatus(
             @PathVariable UUID transferId) {
 
-        FileTransfer transfer = transferRepository.findByTransferId(transferId)
-                .orElseThrow(() -> new FileTransferException(
-                        "Transfer not found: " + transferId, null));
-
         return ResponseEntity
                 .status(HttpStatus.OK)
-                .body(toResponse(transfer));
+                .body(toResponse(senderService.getTransfer(transferId)));
     }
 
     @GetMapping
     public ResponseEntity<List<TransferStatusResponse>> getAll() {
-        List<TransferStatusResponse> transfers = transferRepository
-                .findAllByOrderByCreatedAtDesc()
+
+        List<TransferStatusResponse> transfers = senderService
+                .getAll()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -108,17 +108,10 @@ public class TransferController {
     @DeleteMapping("/{transferId}")
     public ResponseEntity<Void> cancel(@PathVariable UUID transferId) {
 
-        transferRepository.findByTransferId(transferId).ifPresent(transfer -> {
-            if (transfer.getStatus() == TransferStatus.ACTIVE
-                    || transfer.getStatus() == TransferStatus.PAUSED) {
-                transfer.setStatus(TransferStatus.CANCELLED);
-                transferRepository.save(transfer);
-                log.info("Transfer cancelled by user: {}", transferId);
-            }
-        });
+        senderService.cancel(transferId);
 
         return ResponseEntity
-                .noContent()
+                .status(HttpStatus.NO_CONTENT)
                 .build();
     }
 
@@ -175,14 +168,41 @@ public class TransferController {
     }
 
     /**
+     * Target receives directory registration,
+     * creates records and allocates all partial files
+     */
+    @PostMapping("/receive-directory")
+    public ResponseEntity<Void> prepareReceiveDirectory(
+            @RequestBody ReceiveDirectoryRequest request) {
+
+        receiverService.prepareReceiveDirectory(request);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .build();
+    }
+
+    /** Target receives batch registration,
+     * creates records and allocates all partial files
+     */
+    @PostMapping("/receive-batch")
+    public ResponseEntity<Void> prepareReceiveBatch(
+            @RequestBody ReceiveBatchRequest request) {
+
+        receiverService.prepareReceiveBatch(request);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .build();
+    }
+
+    /**
      * Source queries this to find confirmed offset before resuming.
      */
     @GetMapping("/{transferId}/offset")
     public ResponseEntity<Map<String, Long>> getOffset(@PathVariable UUID transferId) {
 
-        FileTransfer transfer = transferRepository.findByTransferId(transferId)
-                .orElseThrow(() -> new FileTransferException(
-                        "Transfer not found: " + transferId, null));
+        FileTransfer transfer = senderService.getTransfer(transferId);
 
         return ResponseEntity
                 .status(HttpStatus.OK)
@@ -202,6 +222,35 @@ public class TransferController {
             throw new FileTransferException(
                     "Invalid Content-Range header: " + contentRange, e);
         }
+    }
+
+    /**
+     * Initiate a full directory transfer, walks source dir,
+     * registers on target, sends async
+     */
+    @PostMapping("/directory")
+    public ResponseEntity<InitiateDirectoryTransferResponse> initiateDirectory(
+            @RequestBody InitiateDirectoryTransferRequest request) {
+
+        InitiateDirectoryTransferResponse response = directorySenderService.initiate(request);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(response);
+    }
+
+    /**
+     * Initiate a batch of loose files, no directory structure, no relativePath
+     */
+    @PostMapping("/multi")
+    public ResponseEntity<InitiateBatchTransferResponse> initiateBatch(
+            @RequestBody InitiateBatchTransferRequest request) {
+
+        InitiateBatchTransferResponse response = batchSenderService.initiate(request);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(response);
     }
 
     // Mapper for transfer

@@ -1,7 +1,7 @@
 package com.atamanahmet.beamlink.agent.service;
 
 import com.atamanahmet.beamlink.agent.domain.FileTransfer;
-import com.atamanahmet.beamlink.agent.domain.TransferStatus;
+import com.atamanahmet.beamlink.agent.domain.enums.TransferStatus;
 import com.atamanahmet.beamlink.agent.dto.ChunkAckResponse;
 import com.atamanahmet.beamlink.agent.exception.FileTransferException;
 import com.atamanahmet.beamlink.agent.repository.FileTransferRepository;
@@ -22,6 +22,7 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -35,9 +36,18 @@ public class TransferAsyncSender {
     private final FileTransferRepository transferRepository;
     private final ObjectMapper objectMapper;
 
-
     @Async
     public void sendAsync(UUID transferId, String targetIp, int targetPort, String targetToken) {
+        doSend(transferId, targetIp, targetPort, targetToken);
+    }
+
+    @Async
+    public CompletableFuture<Void> sendAsyncFuture(UUID transferId, String targetIp, int targetPort, String targetToken) {
+        doSend(transferId, targetIp, targetPort, targetToken);
+        return CompletableFuture.completedFuture(null);
+    }
+
+    private void doSend(UUID transferId, String targetIp, int targetPort, String targetToken) {
         FileTransfer transfer = transferRepository.findByTransferId(transferId)
                 .orElse(null);
 

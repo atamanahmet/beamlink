@@ -2,26 +2,21 @@ package com.atamanahmet.beamlink.agent.service;
 
 import com.atamanahmet.beamlink.agent.config.AgentConfig;
 import com.atamanahmet.beamlink.agent.domain.Agent;
-import com.atamanahmet.beamlink.agent.domain.AgentState;
+import com.atamanahmet.beamlink.agent.domain.enums.AgentState;
 import com.atamanahmet.beamlink.agent.dto.AgentIdentityResponse;
 import com.atamanahmet.beamlink.agent.dto.AgentStatusDTO;
 import com.atamanahmet.beamlink.agent.dto.ApprovalPushRequest;
 import com.atamanahmet.beamlink.agent.event.AgentApprovedEvent;
 import com.atamanahmet.beamlink.agent.event.AgentIdentityChangedEvent;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.atamanahmet.beamlink.agent.repository.AgentRepository;
 import jakarta.annotation.PostConstruct;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
 
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -32,15 +27,10 @@ public class AgentService {
     private final Logger log = LoggerFactory.getLogger(AgentService.class);
 
     private final AgentConfig config;
+    private final AgentRepository agentRepository;
     private final LogService logService;
     private final PeerCacheService peerCacheService;
     private final ApplicationEventPublisher eventPublisher;
-
-    @Value("${agent.info-file:agent_info.json}")
-    private String infoFilePath;
-
-    @Value("${agent.info-file-tmp:agent_info.json.tmp}")
-    private String infoFileTmpPath;
 
     @Value("${server.port}")
     private int SERVER_PORT;
@@ -48,69 +38,33 @@ public class AgentService {
     @Value("${agent.ip-address}")
     private String SERVER_ADDRESS;
 
-    @Getter
+    /* In-memory cache, in sync with DB */
     private Agent agent;
 
-    private final Gson gson = new GsonBuilder()
-            .setPrettyPrinting()
-            .create();
-
     @PostConstruct
-    public void init() {
-        File file = new File(infoFilePath);
-        if (file.exists()) {
-            loadFromFile(file);
-        } else {
-            createNewAgent();
-        }
+    public synchronized void init() {
+        agent = agentRepository.findById(1L).orElseGet(() -> {
+            Agent a = new Agent();
+            a.setAgentName("Agent-" + SERVER_ADDRESS + ":" + SERVER_PORT);
+            a.setIpAddress(SERVER_ADDRESS);
+            a.setPort(SERVER_PORT);
+            a.setState(AgentState.UNREGISTERED);
+            log.info("No agent record found, creating new agent: {}", a.getAgentName());
+            return agentRepository.save(a);
+        });
+
+        log.info("Agent loaded: name={}, agentId={}, state={}",
+                agent.getAgentName(), agent.getAgentId(), agent.getState());
     }
 
-    private void createNewAgent() {
-        agent = new Agent();
-        agent.setAgentName("Agent-" + SERVER_ADDRESS + ":" + SERVER_PORT);
-        agent.setIpAddress(SERVER_ADDRESS);
-        agent.setPort(SERVER_PORT);
-        agent.setState(AgentState.UNREGISTERED);
-        saveToFile();
-        log.info("Generated new agent: {}", agent.getAgentName());
-        log.info("IP address: {}", agent.getIpAddress());
+    /* Persist and keep cache in sync */
+    private synchronized void persist() {
+        agent = agentRepository.save(agent);
     }
-
-    private void loadFromFile(File file) {
-        try (FileReader reader = new FileReader(file)) {
-            agent = gson.fromJson(reader, Agent.class);
-            if (agent == null || agent.getAgentName() == null) {
-                log.warn("Corrupted agent file. Creating new agent.");
-                createNewAgent();
-            } else {
-                log.info("Loaded agent: name={}, id={}, state={}",
-                        agent.getAgentName(), agent.getId(), agent.getState());
-            }
-        } catch (Exception e) {
-            log.warn("Failed to read agent file: {}. Creating new agent.", e.getMessage());
-            createNewAgent();
-        }
-    }
-
-    /**
-     * Writes to a temp file first, then renames.
-     * Prevents corrupted state if process dies mid-write.
-     */
-    private synchronized void saveToFile() {
-        try {
-            Path tmp    = Path.of(infoFileTmpPath);
-            Path target = Path.of(infoFilePath);
-            Files.writeString(tmp, gson.toJson(agent));
-            Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            log.error("Failed to save agent state to file: {}", e.getMessage());
-        }
-    }
-
 
     public synchronized void transitionTo(AgentState newState) {
         AgentState current = agent.getState();
-        // Guard invalid transitions
+
         if (current == AgentState.APPROVED && newState == AgentState.UNREGISTERED) {
             log.warn("Ignoring invalid state transition {} -> {}", current, newState);
             return;
@@ -124,94 +78,81 @@ public class AgentService {
 
         log.info("Agent state: {} -> {}", current, newState);
         agent.setState(newState);
-        saveToFile();
+        persist();
     }
 
     public synchronized void forceReset() {
-        if (agent.getState() == AgentState.UNREGISTERED && agent.getId() == null) {
+        if (agent.getState() == AgentState.UNREGISTERED && agent.getAgentId() == null) {
             log.debug("Agent already in clean UNREGISTERED state, skipping reset.");
             return;
         }
-        agent.setId(null);
+        agent.setAgentId(null);
         agent.setState(AgentState.UNREGISTERED);
         agent.setAuthToken(null);
         agent.setPublicToken(null);
         agent.setAgentName(getAgentName());
-        saveToFile();
+        persist();
         log.info("Agent force reset to UNREGISTERED.");
     }
 
-    /**
-     * Stores both tokens received from Nexus and persists to file.
-     */
+    /** Stores both tokens received from Nexus and persists to DB. */
     public synchronized void storeTokens(String authToken, String publicToken) {
         agent.setAuthToken(authToken);
         agent.setPublicToken(publicToken);
-        saveToFile();
+        persist();
         log.debug("Tokens stored.");
     }
 
-    /**
-     * Called when nexus pushes approval to this agent.
-     */
+    /** Called when nexus pushes approval to this agent. */
     public synchronized void applyNexusIdentity(ApprovalPushRequest request) {
-
-        agent.setId(request.getAgentId());
+        agent.setAgentId(request.getAgentId());
         agent.setAgentName(request.getApprovedName());
         agent.setAuthToken(request.getAuthToken());
         agent.setPublicToken(request.getPublicToken());
         agent.setState(request.getState());
-        saveToFile();
-        log.info("✓ Agent approved. Name={}, Id={}", agent.getAgentName(),agent.getId());
+        persist();
+        log.info("Agent approved. Name={}, AgentId={}", agent.getAgentName(), agent.getAgentId());
 
         eventPublisher.publishEvent(new AgentApprovedEvent(this));
     }
 
-    // Tokens can be null before approval
     public synchronized void applyNexusIdentity(AgentIdentityResponse response) {
         boolean wasAlreadyApproved = agent.getState() == AgentState.APPROVED
-                && agent.getId() != null
-                && agent.getId().equals(response.getAgentId());
+                && agent.getAgentId() != null
+                && agent.getAgentId().equals(response.getAgentId());
 
-        boolean identityChanged = !response.getAgentId().equals(agent.getId())
+        boolean identityChanged = !response.getAgentId().equals(agent.getAgentId())
                 || !response.getAgentName().equals(agent.getAgentName())
                 || !Objects.equals(response.getAuthToken(), agent.getAuthToken())
                 || !Objects.equals(response.getPublicToken(), agent.getPublicToken())
                 || response.getState() != agent.getState();
 
-        log.info("✓ Identity applied. Name={}, Id={}, hasPublicToken={}, hasAuthToken={}, changed={}",
-                agent.getAgentName(), agent.getId(),
-                agent.getPublicToken() != null,
-                agent.getAuthToken() != null,
-                identityChanged);
-
-        agent.setId(response.getAgentId());
+        agent.setAgentId(response.getAgentId());
         agent.setAgentName(response.getAgentName());
         agent.setAuthToken(response.getAuthToken());
         agent.setPublicToken(response.getPublicToken());
         agent.setState(response.getState());
-        saveToFile();
-        log.info("✓ Identity applied. Name={}, Id={}, changed={}",
-                agent.getAgentName(), agent.getId(), identityChanged);
+        persist();
+        log.info("Identity applied. Name={}, AgentId={}, changed={}",
+                agent.getAgentName(), agent.getAgentId(), identityChanged);
 
         if (!wasAlreadyApproved && response.getState() == AgentState.APPROVED) {
             eventPublisher.publishEvent(new AgentApprovedEvent(this));
         } else if (identityChanged) {
-            // Only broadcast to UI, don't reconnect WS
             eventPublisher.publishEvent(new AgentIdentityChangedEvent(this));
         }
     }
 
-
     public synchronized void updateAgentName(String newName) {
         agent.setAgentName(newName);
-        saveToFile();
+        persist();
         log.info("Agent renamed to: {}", newName);
     }
+
     public synchronized void updateAgentId(UUID newAgentId) {
-        agent.setId(newAgentId);
-        saveToFile();
-        log.info("Agent updated id to: {}", newAgentId);
+        agent.setAgentId(newAgentId);
+        persist();
+        log.info("Agent updated agentId to: {}", newAgentId);
     }
 
     public boolean isApproved() {
@@ -222,8 +163,9 @@ public class AgentService {
         return agent.getState();
     }
 
+    /* Returns the nexus assigned UUID */
     public UUID getAgentId() {
-        return agent.getId();
+        return agent.getAgentId();
     }
 
     public String getAgentName() {
@@ -238,13 +180,16 @@ public class AgentService {
         return agent.getPublicToken();
     }
 
+    public Agent getAgent() {
+        return agent;
+    }
+
     public AgentStatusDTO getAgentStatusDTO() {
         return AgentStatusDTO.builder()
-                .agentId(agent.getId())
+                .agentId(agent.getAgentId())
                 .agentName(agent.getAgentName())
                 .ipAddress(agent.getIpAddress())
                 .port(agent.getPort())
-                .status(agent.isOnline())
                 .unSyncedLogs(logService.getUnsyncedLogs().size())
                 .peerVersion(peerCacheService.getCurrentPeerListVersion())
                 .build();

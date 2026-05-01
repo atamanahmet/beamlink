@@ -35,6 +35,8 @@ public class AgentConfig {
     @Value("${agent.transfer.expiry-hours}")
     private long transferExpiryHours;
 
+    @Value("${agent.auto-resume-group-transfers:false}")
+    private boolean autoResumeGroupTransfers;
 
     @PostConstruct
     public void init() {

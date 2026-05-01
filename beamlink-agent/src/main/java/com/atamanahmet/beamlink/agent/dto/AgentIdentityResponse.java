@@ -1,6 +1,6 @@
 package com.atamanahmet.beamlink.agent.dto;
 
-import com.atamanahmet.beamlink.agent.domain.AgentState;
+import com.atamanahmet.beamlink.agent.domain.enums.AgentState;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

@@ -1,7 +1,7 @@
 package com.atamanahmet.beamlink.agent.service;
 
 import com.atamanahmet.beamlink.agent.config.AgentConfig;
-import com.atamanahmet.beamlink.agent.domain.AgentState;
+import com.atamanahmet.beamlink.agent.domain.enums.AgentState;
 import com.atamanahmet.beamlink.agent.domain.TransferLog;
 import com.atamanahmet.beamlink.agent.event.AgentApprovedEvent;
 import com.atamanahmet.beamlink.agent.event.NexusEventPublisher;
