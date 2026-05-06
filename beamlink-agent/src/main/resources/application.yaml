@@ -21,6 +21,8 @@ agent:
     username: ${AGENT_UI_USERNAME:agent}
     password: ${AGENT_UI_PASSWORD:agent}
     jwt-secret: ${AGENT_JWT_SECRET:auto}
+  auto-resume-transfer: false
+  auto-resume-group-transfers: false
 
 
 logging:

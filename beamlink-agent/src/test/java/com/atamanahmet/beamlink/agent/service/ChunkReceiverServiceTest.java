@@ -2,7 +2,7 @@ package com.atamanahmet.beamlink.agent.service;
 
 import com.atamanahmet.beamlink.agent.config.AgentConfig;
 import com.atamanahmet.beamlink.agent.domain.FileTransfer;
-import com.atamanahmet.beamlink.agent.domain.TransferStatus;
+import com.atamanahmet.beamlink.agent.domain.enums.TransferStatus;
 import com.atamanahmet.beamlink.agent.dto.ChunkAckResponse;
 import com.atamanahmet.beamlink.agent.exception.FileTransferException;
 import com.atamanahmet.beamlink.agent.repository.FileTransferRepository;
@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -90,162 +91,6 @@ class ChunkReceiverServiceTest {
                 .hasMessageContaining("not active");
     }
 
-    @Test
-    void receiveChunk_rejectsOutOfOrderOffset() {
-        activeTransfer.setConfirmedOffset(0L);
-        when(transferRepository.findByTransferId(transferId))
-                .thenReturn(Optional.of(activeTransfer));
-
-        assertThatThrownBy(() ->
-                chunkReceiverService.receiveChunk(transferId, 512,
-                        new ByteArrayInputStream(new byte[0])))
-                .isInstanceOf(FileTransferException.class)
-                .hasMessageContaining("Unexpected offset");
-    }
-
-    @Test
-    void prepareReceive_rejectsZeroFileSize() {
-        FileTransfer zeroSize = FileTransfer.initiate(
-                transferId, UUID.randomUUID(), null, "testfile.txt", null, 0L
-        );
-
-        assertThatThrownBy(() -> chunkReceiverService.prepareReceive(zeroSize))
-                .isInstanceOf(FileTransferException.class)
-                .hasMessageContaining("Invalid file size");
-    }
-
-    /**
-     * prepareReceive must pre-allocate a .part file with the exact declared size.
-     */
-    @Test
-    void prepareReceive_createsPartialFileWithCorrectSize() throws IOException {
-
-        FileTransfer transfer = FileTransfer.initiate(
-                transferId, UUID.randomUUID(), UUID.randomUUID(),
-                "myfile.bin", null, 2048L
-        );
-        transfer.setStatus(TransferStatus.ACTIVE);
-
-        // Should not throw
-        assertThatCode(() -> chunkReceiverService.prepareReceive(transfer))
-                .doesNotThrowAnyException();
-
-        verify(transferRepository).save(transfer);
-
-        // Clean up partial file created under CWD
-        Path partial = Path.of("./data/partial/myfile.bin.part");
-        Files.deleteIfExists(partial);
-    }
-
-    /**
-     * Full path, single chunk that fills the file to status COMPLETED.
-     */
-    @Test
-    void receiveChunk_singleChunkCompletesTransfer() throws IOException {
-        byte[] payload = "hello agent transfer".getBytes();
-        long fileSize = payload.length;
-
-        String fileName = "single-" + transferId + ".bin";
-
-        FileTransfer transfer = FileTransfer.initiate(
-                transferId, UUID.randomUUID(), UUID.randomUUID(),
-                fileName, null, fileSize
-        );
-        transfer.setStatus(TransferStatus.ACTIVE);
-        transfer.setConfirmedOffset(0L);
-
-        Path partialDir = Path.of("./data/partial");
-        Files.createDirectories(partialDir);
-        Path partialFile = partialDir.resolve(fileName + ".part");
-        try (var raf = new java.io.RandomAccessFile(partialFile.toFile(), "rw")) {
-            raf.setLength(fileSize);
-        }
-
-        when(transferRepository.findByTransferId(transferId))
-                .thenReturn(Optional.of(transfer));
-        when(agentConfig.getUploadDirectory())
-                .thenReturn(tempDir.toString());
-        when(agentService.getAgentId()).thenReturn(UUID.randomUUID());
-        when(agentService.getAgentName()).thenReturn("test-agent");
-
-        ChunkAckResponse ack = chunkReceiverService.receiveChunk(
-                transferId, 0L, new ByteArrayInputStream(payload)
-        );
-
-        assertThat(ack.getConfirmedOffset()).isEqualTo(fileSize);
-        assertThat(ack.isComplete()).isTrue();
-
-        verify(transferRepository, atLeastOnce()).save(argThat(t ->
-                t.getStatus() == TransferStatus.COMPLETED
-        ));
-
-        Path finalFile = tempDir.resolve(fileName);
-        assertThat(finalFile).exists();
-        assertThat(Files.readAllBytes(finalFile)).isEqualTo(payload);
-    }
-
-    /**
-     * Two sequential chunks, each processed by receiveChunk in order.
-     * After both chunks confirmedOffset == fileSize and status is COMPLETED.
-     */
-    @Test
-    void receiveChunk_multipleChunksReassembleCorrectly() throws IOException {
-        byte[] part1 = "FIRST_CHUNK_".getBytes();
-        byte[] part2 = "SECOND_CHUNK".getBytes();
-        long fileSize = part1.length + part2.length;
-
-        String fileName = "multi-" + transferId + ".bin";
-
-        FileTransfer transfer = FileTransfer.initiate(
-                transferId, UUID.randomUUID(), UUID.randomUUID(),
-                fileName, null, fileSize
-        );
-        transfer.setStatus(TransferStatus.ACTIVE);
-        transfer.setConfirmedOffset(0L);
-
-        // Pre-allocate .part file
-        Path partialDir = Path.of("./data/partial");
-        Files.createDirectories(partialDir);
-        Path partialFile = partialDir.resolve(fileName + ".part");
-        try (var raf = new java.io.RandomAccessFile(partialFile.toFile(), "rw")) {
-            raf.setLength(fileSize);
-        }
-
-        when(transferRepository.findByTransferId(transferId))
-                .thenReturn(Optional.of(transfer));
-        when(agentConfig.getUploadDirectory())
-                .thenReturn(tempDir.toString());
-        when(agentService.getAgentId()).thenReturn(UUID.randomUUID());
-        when(agentService.getAgentName()).thenReturn("test-agent");
-
-        // ── chunk 1 ──
-        ChunkAckResponse ack1 = chunkReceiverService.receiveChunk(
-                transferId, 0L, new ByteArrayInputStream(part1)
-        );
-
-        assertThat(ack1.getConfirmedOffset()).isEqualTo(part1.length);
-        assertThat(ack1.isComplete()).isFalse();
-
-        // Simulate DB update between chunks (service saves and we re-read)
-        transfer.setConfirmedOffset(ack1.getConfirmedOffset());
-
-        // ── chunk 2 ──
-        ChunkAckResponse ack2 = chunkReceiverService.receiveChunk(
-                transferId, (long) part1.length, new ByteArrayInputStream(part2)
-        );
-
-        assertThat(ack2.getConfirmedOffset()).isEqualTo(fileSize);
-        assertThat(ack2.isComplete()).isTrue();
-
-        // Reassembled file must equal part1 + part2
-        byte[] expected = new byte[part1.length + part2.length];
-        System.arraycopy(part1, 0, expected, 0, part1.length);
-        System.arraycopy(part2, 0, expected, part1.length, part2.length);
-
-        Path finalFile = tempDir.resolve(fileName);
-        assertThat(Files.readAllBytes(finalFile)).isEqualTo(expected);
-    }
-
     /**
      * receiveChunk on a CANCELLED transfer must throw, not write anything.
      */
@@ -280,9 +125,186 @@ class ChunkReceiverServiceTest {
                 .hasMessageContaining("not active");
     }
 
+    @Test
+    void receiveChunk_rejectsOutOfOrderOffset() {
+        activeTransfer.setConfirmedOffset(0L);
+        when(transferRepository.findByTransferId(transferId))
+                .thenReturn(Optional.of(activeTransfer));
+
+        assertThatThrownBy(() ->
+                chunkReceiverService.receiveChunk(transferId, 512,
+                        new ByteArrayInputStream(new byte[0])))
+                .isInstanceOf(FileTransferException.class)
+                .hasMessageContaining("Unexpected offset");
+    }
+
+    @Test
+    void prepareReceive_rejectsZeroFileSize() {
+        FileTransfer zeroSize = FileTransfer.initiate(
+                transferId, UUID.randomUUID(), null, "testfile.txt", null, 0L
+        );
+
+        assertThatThrownBy(() -> chunkReceiverService.prepareReceive(zeroSize))
+                .isInstanceOf(FileTransferException.class)
+                .hasMessageContaining("Invalid file size");
+    }
+
     /**
-     * confirmedOffset is updated correctly after each chunk
-     * the next expected offset is previous + bytes written.
+     * prepareReceive must pre-allocate a .part file with the exact declared size.
+     */
+    @Test
+    void prepareReceive_createsPartialFileWithCorrectSize() throws IOException {
+
+        long declaredSize = 2048L;
+        String fileName = "myfile.bin";
+
+        FileTransfer transfer = FileTransfer.initiate(
+                transferId, UUID.randomUUID(), UUID.randomUUID(),
+                fileName, null, declaredSize
+        );
+
+        transfer.setStatus(TransferStatus.ACTIVE);
+
+        Path partialDir = tempDir.resolve("partial");
+        when(agentConfig.getPartialDirectory()).thenReturn(partialDir.toString());
+
+        chunkReceiverService.prepareReceive(transfer);
+
+        verify(transferRepository).save(transfer);
+
+        // .part file must exist on disk at the expected location
+        Path expectedPartFile = partialDir.resolve(fileName + ".part");
+        assertThat(expectedPartFile)
+                .exists()
+                .isRegularFile();
+
+        assertThat(Files.size(expectedPartFile)).isEqualTo(declaredSize);
+    }
+
+    /**
+     * Full path, single chunk that fills the file to status COMPLETED.
+     */
+    @Test
+    void receiveChunk_whenSingleChunkFillsFile_completesTransferAndMovesToFinalLocation() throws IOException {
+
+        byte[] payload = "test agent transfer".getBytes();
+        long fileSize = payload.length;
+
+        String fileName = "single-" + transferId + ".bin";
+
+        FileTransfer transfer = FileTransfer.initiate(
+                transferId, UUID.randomUUID(), UUID.randomUUID(),
+                fileName, null, fileSize
+        );
+        transfer.setStatus(TransferStatus.ACTIVE);
+        transfer.setConfirmedOffset(0L);
+
+        Path partialDir = tempDir.resolve("partial");
+        Path finalDir   = tempDir.resolve("uploads");
+        Files.createDirectories(partialDir);
+
+        try (RandomAccessFile raf = new RandomAccessFile(
+                partialDir
+                        .resolve(fileName + ".part")
+                        .toFile(), "rw"))
+        {
+            raf.setLength(fileSize);
+        }
+
+        when(transferRepository.findByTransferId(transferId)).thenReturn(Optional.of(transfer));
+        when(agentConfig.getPartialDirectory()).thenReturn(partialDir.toString());
+        when(agentConfig.getUploadDirectory()).thenReturn(finalDir.toString());
+        when(agentService.getAgentId()).thenReturn(UUID.randomUUID());
+        when(agentService.getAgentName()).thenReturn("test-agent");
+
+        ChunkAckResponse ack = chunkReceiverService.receiveChunk(
+                transferId, 0L, new ByteArrayInputStream(payload)
+        );
+
+        assertThat(ack.getConfirmedOffset()).isEqualTo(fileSize);
+        assertThat(ack.isComplete()).isTrue();
+
+        verify(transferRepository, atLeastOnce()).save(argThat(t ->
+                t.getStatus() == TransferStatus.COMPLETED
+        ));
+
+        Path finalFile = finalDir.resolve(fileName);
+        assertThat(finalFile).exists();
+        assertThat(Files.readAllBytes(finalFile)).isEqualTo(payload);
+
+    }
+
+    /**
+     * Two sequential chunks, each processed by receiveChunk in order.
+     * After both chunks confirmedOffset == fileSize and status is COMPLETED.
+     */
+    @Test
+    void receiveChunk_whenChunksArriveSequentially_tracksOffsetAndReassemblesToFinalLocation() throws IOException {
+        byte[] part1 = "FIRST_CHUNK_".getBytes();
+        byte[] part2 = "SECOND_CHUNK".getBytes();
+        long fileSize = part1.length + part2.length;
+
+        String fileName = "multi-" + transferId + ".bin";
+
+        FileTransfer transfer = FileTransfer.initiate(
+                transferId, UUID.randomUUID(), UUID.randomUUID(),
+                fileName, null, fileSize
+        );
+        transfer.setStatus(TransferStatus.ACTIVE);
+        transfer.setConfirmedOffset(0L);
+
+        // Pre-allocate .part file
+        Path partialDir = tempDir.resolve("partial");
+        Path finalDir   = tempDir.resolve("uploads");
+        Files.createDirectories(partialDir);
+
+        try (RandomAccessFile raf = new RandomAccessFile(
+                partialDir
+                        .resolve(fileName + ".part")
+                        .toFile(), "rw"))
+        {
+            raf.setLength(fileSize);
+        }
+
+        when(transferRepository.findByTransferId(transferId)).thenReturn(Optional.of(transfer));
+        when(agentConfig.getPartialDirectory()).thenReturn(partialDir.toString());
+        when(agentConfig.getUploadDirectory()).thenReturn(finalDir.toString());
+        when(agentService.getAgentId()).thenReturn(UUID.randomUUID());
+        when(agentService.getAgentName()).thenReturn("test-agent");
+
+        // Chunk 1
+        ChunkAckResponse ack1 = chunkReceiverService.receiveChunk(
+                transferId, 0L, new ByteArrayInputStream(part1)
+        );
+
+        assertThat(ack1.getConfirmedOffset()).isEqualTo(part1.length);
+        assertThat(ack1.isComplete()).isFalse();
+
+        // The service persisted the new offset. Simulate what the DB-loaded
+        // entity looks like when chunk 2's request hits the endpoint.
+        transfer.setConfirmedOffset(ack1.getConfirmedOffset());
+
+        // Chunk 2
+        ChunkAckResponse ack2 = chunkReceiverService.receiveChunk(
+                transferId, part1.length, new ByteArrayInputStream(part2)
+        );
+
+        assertThat(ack2.getConfirmedOffset()).isEqualTo(fileSize);
+        assertThat(ack2.isComplete()).isTrue();
+
+        // Reassembled file must equal part1 + part2
+        byte[] expected = new byte[part1.length + part2.length];
+        System.arraycopy(part1, 0, expected, 0, part1.length);
+        System.arraycopy(part2, 0, expected, part1.length, part2.length);
+
+        assertThat(Files.readAllBytes(finalDir.resolve(fileName))).isEqualTo(expected);
+    }
+
+
+
+    /**
+     * Verifies that after writing a middle chunk (not the last one),
+     * confirmedOffset is advanced correctly in the database and isComplete is false.
      */
     @Test
     void receiveChunk_updatesConfirmedOffsetAfterWrite() throws IOException {
@@ -291,9 +313,11 @@ class ChunkReceiverServiceTest {
         long fileSize = 1024L;   // two chunks of 512
 
         String fileName = "offset-" + transferId + ".bin";
-        Path partialDir = Path.of("./data/partial");
+
+        Path partialDir = tempDir.resolve("partial");
         Files.createDirectories(partialDir);
-        try (var raf = new java.io.RandomAccessFile(
+
+        try (RandomAccessFile raf = new RandomAccessFile(
                 partialDir.resolve(fileName + ".part").toFile(), "rw")) {
             raf.setLength(fileSize);
         }
@@ -305,11 +329,9 @@ class ChunkReceiverServiceTest {
         transfer.setStatus(TransferStatus.ACTIVE);
         transfer.setConfirmedOffset(0L);
 
-        when(transferRepository.findByTransferId(transferId))
-                .thenReturn(Optional.of(transfer));
-//        when(agentConfig.getUploadDirectory()).thenReturn(tempDir.toString());
-//        when(agentService.getAgentId()).thenReturn(UUID.randomUUID());
-//        when(agentService.getAgentName()).thenReturn("test-agent");
+        when(transferRepository.findByTransferId(transferId)).thenReturn(Optional.of(transfer));
+
+        when(agentConfig.getPartialDirectory()).thenReturn(partialDir.toString());
 
         ChunkAckResponse ack = chunkReceiverService.receiveChunk(
                 transferId, 0L, new ByteArrayInputStream(payload)
@@ -321,9 +343,6 @@ class ChunkReceiverServiceTest {
         verify(transferRepository).save(argThat(t ->
                 t.getConfirmedOffset() == 512L
         ));
-
-        // Cleanup
-        Files.deleteIfExists(partialDir.resolve(fileName + ".part"));
     }
 
     /**

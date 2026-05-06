@@ -3,6 +3,8 @@ package com.atamanahmet.beamlink.agent.repository;
 import com.atamanahmet.beamlink.agent.domain.FileTransfer;
 import com.atamanahmet.beamlink.agent.domain.enums.TransferStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -28,4 +30,7 @@ public interface FileTransferRepository extends JpaRepository<FileTransfer, UUID
     List<FileTransfer> findByBatchTransferId(UUID batchTransferId);
 
     List<FileTransfer> findByBatchTransferIdAndStatus(UUID batchTransferId, TransferStatus status);
+
+    @Query("SELECT ft.status FROM FileTransfer ft WHERE ft.transferId = :transferId")
+    Optional<TransferStatus> findStatusByTransferId(@Param("transferId") UUID transferId);
 }

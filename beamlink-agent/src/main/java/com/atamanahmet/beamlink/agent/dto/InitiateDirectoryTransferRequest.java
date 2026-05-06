@@ -15,5 +15,5 @@ public class InitiateDirectoryTransferRequest {
     private UUID targetAgentId;
     private String targetIp;
     private int targetPort;
-    private String targetToken; /* nullable — optional auth */
+    private String targetToken;
 }

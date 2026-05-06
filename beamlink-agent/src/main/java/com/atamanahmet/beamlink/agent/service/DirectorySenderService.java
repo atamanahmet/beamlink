@@ -2,12 +2,11 @@ package com.atamanahmet.beamlink.agent.service;
 
 import com.atamanahmet.beamlink.agent.config.AgentConfig;
 import com.atamanahmet.beamlink.agent.domain.DirectoryTransfer;
-import com.atamanahmet.beamlink.agent.domain.FileTransfer;
 import com.atamanahmet.beamlink.agent.domain.enums.GroupTransferStatus;
-import com.atamanahmet.beamlink.agent.domain.enums.TransferStatus;
 import com.atamanahmet.beamlink.agent.dto.InitiateDirectoryTransferRequest;
 import com.atamanahmet.beamlink.agent.dto.InitiateDirectoryTransferResponse;
 import com.atamanahmet.beamlink.agent.dto.ReceiveDirectoryRequest;
+import com.atamanahmet.beamlink.agent.domain.FileTransfer;
 import com.atamanahmet.beamlink.agent.exception.FileTransferException;
 import com.atamanahmet.beamlink.agent.repository.DirectoryTransferRepository;
 import com.atamanahmet.beamlink.agent.repository.FileTransferRepository;
@@ -16,7 +15,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -44,8 +42,10 @@ public class DirectorySenderService {
     private final FileTransferRepository fileTransferRepository;
     private final AgentService agentService;
     private final AgentConfig agentConfig;
-    private final TransferAsyncSender asyncSender;
+    private final DirectoryAsyncSender directoryAsyncSender;
     private final ObjectMapper objectMapper;
+
+    private final HttpClient httpClient;
 
     /**
      * Called by controller. Validates and walks the directory fully,
@@ -124,7 +124,7 @@ public class DirectorySenderService {
         directoryTransfer.setStatus(GroupTransferStatus.ACTIVE);
         directoryTransferRepository.save(directoryTransfer);
 
-        sendDirectoryAsync(directoryTransferId, request.getTargetIp(),
+        directoryAsyncSender.sendAsync(directoryTransferId, request.getTargetIp(),
                 request.getTargetPort(), request.getTargetToken());
 
         log.info("Directory transfer initiated: {} → {} ({})",
@@ -134,7 +134,7 @@ public class DirectorySenderService {
     }
 
     /**
-     * Resumes a PAUSED directory transfer.
+     * Resumes a PAUSED directory transfer
      * PAUSED file resumes from confirmed offset, remaining PENDING files continue in order.
      */
     public void resume(UUID directoryTransferId) {
@@ -150,95 +150,14 @@ public class DirectorySenderService {
         dt.setStatus(GroupTransferStatus.ACTIVE);
         directoryTransferRepository.save(dt);
 
-        sendDirectoryAsync(directoryTransferId, dt.getTargetIp(),
+        /* Fires on a Spring-managed proxy — @Async works correctly here. */
+        directoryAsyncSender.sendAsync(directoryTransferId, dt.getTargetIp(),
                 dt.getTargetPort(), null); // token not stored — TODO: agent-to-agent auth
     }
 
-    @Async
-    public void sendDirectoryAsync(UUID directoryTransferId, String targetIp,
-                                   int targetPort, String targetToken) {
-        List<FileTransfer> children = fileTransferRepository
-                .findByDirectoryTransferId(directoryTransferId);
-
-        // Order: PAUSED first (resume in progress), then PENDING in creation order
-        List<FileTransfer> queue = new ArrayList<>();
-        children.stream()
-                .filter(ft -> ft.getStatus() == TransferStatus.PAUSED)
-                .forEach(queue::add);
-        children.stream()
-                .filter(ft -> ft.getStatus() == TransferStatus.PENDING
-                        || ft.getStatus() == TransferStatus.ACTIVE)
-                .forEach(queue::add);
-
-        for (FileTransfer ft : queue) {
-            // Check group status before each file
-            DirectoryTransfer dt = directoryTransferRepository
-                    .findById(directoryTransferId).orElse(null);
-            if (dt == null || dt.getStatus() == GroupTransferStatus.CANCELLED
-                    || dt.getStatus() == GroupTransferStatus.FAILED) {
-                log.info("Directory transfer stopped before file {}: group status={}",
-                        ft.getFileName(), dt != null ? dt.getStatus() : "gone");
-                return;
-            }
-            if (dt.getStatus() == GroupTransferStatus.PAUSED) {
-                log.info("Directory transfer paused, stopping before file: {}", ft.getFileName());
-                return;
-            }
-
-            try {
-                asyncSender.sendAsyncFuture(
-                        ft.getTransferId(), targetIp, targetPort, targetToken
-                ).get();
-            } catch (Exception e) {
-                log.error("File failed in directory transfer {}: {}",
-                        directoryTransferId, ft.getFileName(), e);
-                markFileTransferFailed(ft, e.getMessage());
-            }
-        }
-
-        // All files processed — determine final group status
-        completeDirectoryTransfer(directoryTransferId);
-    }
-
-    private void completeDirectoryTransfer(UUID directoryTransferId) {
-        List<FileTransfer> children = fileTransferRepository
-                .findByDirectoryTransferId(directoryTransferId);
-
-        long completed = children.stream()
-                .filter(ft -> ft.getStatus() == TransferStatus.COMPLETED).count();
-        long failed = children.stream()
-                .filter(ft -> ft.getStatus() == TransferStatus.FAILED
-                        || ft.getStatus() == TransferStatus.CANCELLED).count();
-
-        DirectoryTransfer dt = directoryTransferRepository
-                .findById(directoryTransferId).orElse(null);
-        if (dt == null) return;
-
-        if (failed == 0 && completed == children.size()) {
-            dt.setStatus(GroupTransferStatus.COMPLETED);
-            dt.setCompletedAt(Instant.now());
-            log.info("Directory transfer completed: {}", directoryTransferId);
-        } else if (completed > 0 && failed > 0) {
-            dt.setStatus(GroupTransferStatus.PARTIAL);
-            log.info("Directory transfer partial: {}/{} completed, {}/{} failed",
-                    completed, children.size(), failed, children.size());
-        } else {
-            dt.setStatus(GroupTransferStatus.FAILED);
-            log.warn("Directory transfer failed: {}", directoryTransferId);
-        }
-
-        directoryTransferRepository.save(dt);
-    }
-
-    private void markFileTransferFailed(FileTransfer ft, String reason) {
-        ft.setStatus(TransferStatus.FAILED);
-        ft.setFailureReason(reason);
-        fileTransferRepository.save(ft);
-    }
-
     /**
-     * Full recursive walk. Completes entirely before any network call.
-     * Throws if any file is unreadable — no partial walks ever reach the target.
+     * Full recursive walk. Completes entirely before any network call
+     * Throws if any file is unreadable, no partial walks ever reach the target
      */
     private WalkResult walkDirectory(Path root) {
         List<WalkResult.FileEntry> files = new ArrayList<>();
@@ -252,12 +171,13 @@ public class DirectorySenderService {
                 if (path.equals(root)) continue;
 
                 if (Files.isDirectory(path)) {
-                    // Check if this directory has any files (not just subdirs)
-                    boolean hasFiles;
-                    try (Stream<Path> dirContents = Files.list(path)) {
-                        hasFiles = dirContents.anyMatch(Files::isRegularFile);
+                    boolean hasAnyFileAnywhere;
+                    try (Stream<Path> dirContents = Files.walk(path)) {
+                        hasAnyFileAnywhere = dirContents
+                                .filter(p -> !p.equals(path))
+                                .anyMatch(Files::isRegularFile);
                     }
-                    if (!hasFiles) {
+                    if (!hasAnyFileAnywhere) {
                         emptyDirectories.add(root.relativize(path).toString());
                     }
                 } else if (Files.isRegularFile(path)) {
@@ -304,8 +224,6 @@ public class DirectorySenderService {
         payload.setEmptyDirectories(walk.emptyDirectories);
         payload.setFiles(fileEntries);
 
-        HttpClient httpClient = HttpClient.newHttpClient();
-
         try {
             String body = objectMapper.writeValueAsString(payload);
 
@@ -327,7 +245,10 @@ public class DirectorySenderService {
                                 + response.statusCode(), null);
             }
 
-        } catch (IOException | InterruptedException e) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new FileTransferException("Cannot reach target agent", e);
+        } catch (IOException e) {
             throw new FileTransferException("Cannot reach target agent", e);
         }
     }

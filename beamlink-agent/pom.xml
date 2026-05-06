@@ -91,6 +91,12 @@
             <version>6.4.4.Final</version>
         </dependency>
 
+<!--        <dependency>-->
+<!--            <groupId>org.flywaydb</groupId>-->
+<!--            <artifactId>flyway-core</artifactId>-->
+<!--            <scope>compile</scope>-->
+<!--        </dependency>-->
+
         <!-- DevTools -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

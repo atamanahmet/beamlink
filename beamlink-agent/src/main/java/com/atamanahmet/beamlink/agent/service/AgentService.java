@@ -90,7 +90,6 @@ public class AgentService {
         agent.setState(AgentState.UNREGISTERED);
         agent.setAuthToken(null);
         agent.setPublicToken(null);
-        agent.setAgentName(getAgentName());
         persist();
         log.info("Agent force reset to UNREGISTERED.");
     }

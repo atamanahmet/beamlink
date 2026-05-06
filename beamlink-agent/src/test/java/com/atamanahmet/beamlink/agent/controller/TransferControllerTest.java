@@ -1,20 +1,16 @@
 package com.atamanahmet.beamlink.agent.controller;
 
 import com.atamanahmet.beamlink.agent.domain.FileTransfer;
-import com.atamanahmet.beamlink.agent.domain.TransferStatus;
+import com.atamanahmet.beamlink.agent.domain.enums.TransferStatus;
 
 import com.atamanahmet.beamlink.agent.dto.InitiateTransferRequest;
 import com.atamanahmet.beamlink.agent.dto.InitiateTransferResponse;
-import com.atamanahmet.beamlink.agent.dto.TransferStatusResponse;
 
 import com.atamanahmet.beamlink.agent.exception.FileTransferException;
 import com.atamanahmet.beamlink.agent.repository.FileTransferRepository;
 
 import com.atamanahmet.beamlink.agent.security.config.SecurityConfig;
-import com.atamanahmet.beamlink.agent.service.AgentAuthService;
-import com.atamanahmet.beamlink.agent.service.ChunkReceiverService;
-import com.atamanahmet.beamlink.agent.service.RegistrationService;
-import com.atamanahmet.beamlink.agent.service.TransferSenderService;
+import com.atamanahmet.beamlink.agent.service.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -32,6 +28,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -57,6 +54,12 @@ class TransferControllerTest {
     private TransferSenderService senderService;
 
     @MockBean
+    private DirectorySenderService directorySenderService;
+
+    @MockBean
+    private BatchSenderService batchSenderService;
+
+    @MockBean
     private ChunkReceiverService receiverService;
 
     @MockBean
@@ -72,7 +75,7 @@ class TransferControllerTest {
         when(senderService.initiate(any())).thenReturn(new InitiateTransferResponse(transferId));
 
         InitiateTransferRequest request = new InitiateTransferRequest();
-        request.setFilePath("C:\\test\\file.txt");
+        request.setFilePath(Path.of("test", "file.txt").toString());
         request.setTargetAgentId(UUID.randomUUID());
         request.setTargetIp("127.0.0.1");
         request.setTargetPort(8081);
@@ -92,7 +95,7 @@ class TransferControllerTest {
                 .thenThrow(new FileTransferException("File not found", null));
 
         InitiateTransferRequest request = new InitiateTransferRequest();
-        request.setFilePath("C:\\does\\not\\exist.txt");
+        request.setFilePath(Path.of("does", "not", "exist.txt").toString());
         request.setTargetAgentId(UUID.randomUUID());
         request.setTargetIp("127.0.0.1");
         request.setTargetPort(8081);
@@ -111,12 +114,11 @@ class TransferControllerTest {
         UUID transferId = UUID.randomUUID();
         FileTransfer transfer = FileTransfer.initiate(
                 transferId, UUID.randomUUID(), UUID.randomUUID(),
-                "file.txt", "C:\\test\\file.txt", 1024L
+                "file.txt", Path.of("test", "file.txt").toString(), 1024L
         );
         transfer.setStatus(TransferStatus.ACTIVE);
 
-        when(transferRepository.findByTransferId(transferId))
-                .thenReturn(Optional.of(transfer));
+        when(senderService.getTransfer(transferId)).thenReturn(transfer);
 
         mockMvc.perform(get("/api/transfers/{id}/status", transferId))
                 .andExpect(status().isOk())
@@ -129,8 +131,8 @@ class TransferControllerTest {
     @WithMockUser
     void getStatus_returns500WhenNotFound() throws Exception {
         UUID transferId = UUID.randomUUID();
-        when(transferRepository.findByTransferId(transferId))
-                .thenReturn(Optional.empty());
+        when(senderService.getTransfer(transferId))
+                .thenThrow(new FileTransferException("Transfer not found", null)); // ← fix
 
         mockMvc.perform(get("/api/transfers/{id}/status", transferId))
                 .andExpect(status().isInternalServerError());
@@ -140,38 +142,22 @@ class TransferControllerTest {
     @WithMockUser
     void cancel_returns204() throws Exception {
         UUID transferId = UUID.randomUUID();
-        FileTransfer transfer = FileTransfer.initiate(
-                transferId, UUID.randomUUID(), UUID.randomUUID(),
-                "file.txt", "C:\\test\\file.txt", 1024L
-        );
-        transfer.setStatus(TransferStatus.ACTIVE);
-
-        when(transferRepository.findByTransferId(transferId))
-                .thenReturn(Optional.of(transfer));
+        doNothing().when(senderService).cancel(transferId);
 
         mockMvc.perform(delete("/api/transfers/{id}", transferId))
                 .andExpect(status().isNoContent());
 
-        verify(transferRepository).save(argThat(t ->
-                t.getStatus() == TransferStatus.CANCELLED));
+        verify(senderService).cancel(transferId);
     }
 
     @Test
     @WithMockUser
     void cancel_doesNothingIfAlreadyCompleted() throws Exception {
         UUID transferId = UUID.randomUUID();
-        FileTransfer transfer = FileTransfer.initiate(
-                transferId, UUID.randomUUID(), UUID.randomUUID(),
-                "file.txt", "C:\\test\\file.txt", 1024L
-        );
-        transfer.setStatus(TransferStatus.COMPLETED);
-
-        when(transferRepository.findByTransferId(transferId))
-                .thenReturn(Optional.of(transfer));
 
         mockMvc.perform(delete("/api/transfers/{id}", transferId))
                 .andExpect(status().isNoContent());
 
-        verify(transferRepository, never()).save(any());
+        verify(senderService).cancel(transferId);
     }
 }

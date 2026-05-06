@@ -3,11 +3,13 @@ package com.atamanahmet.beamlink.agent.config;
 import lombok.Getter;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import jakarta.annotation.PostConstruct;
 
 import java.io.File;
+import java.net.http.HttpClient;
 
 
 /**
@@ -50,7 +52,6 @@ public class AgentConfig {
         new File(partialDirectory).mkdirs();
         new File("./data/database").mkdirs();
     }
-
 
 }
 

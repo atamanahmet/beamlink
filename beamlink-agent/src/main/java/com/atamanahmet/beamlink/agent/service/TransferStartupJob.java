@@ -32,7 +32,9 @@ public class TransferStartupJob implements ApplicationRunner {
     private final DirectoryTransferRepository directoryTransferRepository;
     private final BatchTransferRepository batchTransferRepository;
     private final DirectorySenderService directorySenderService;
+    private final DirectoryAsyncSender directoryAsyncSender;
     private final BatchSenderService batchSenderService;
+    private final BatchAsyncSender batchAsyncSender;
     private final AgentService agentService;
     private final AgentConfig agentConfig;
 
@@ -111,7 +113,7 @@ public class TransferStartupJob implements ApplicationRunner {
             if (agentConfig.isAutoResumeGroupTransfers()) {
                 dt.setStatus(GroupTransferStatus.ACTIVE);
                 directoryTransferRepository.save(dt);
-                directorySenderService.sendDirectoryAsync(
+                directoryAsyncSender.sendAsync(
                         dt.getDirectoryTransferId(), dt.getTargetIp(), dt.getTargetPort(), null);
                 log.info("Auto-resumed directory transfer: {}", dt.getDirectoryTransferId());
             }
@@ -145,7 +147,7 @@ public class TransferStartupJob implements ApplicationRunner {
             if (agentConfig.isAutoResumeGroupTransfers()) {
                 bt.setStatus(GroupTransferStatus.ACTIVE);
                 batchTransferRepository.save(bt);
-                batchSenderService.sendBatchAsync(
+                batchAsyncSender.sendAsync(
                         bt.getBatchTransferId(), bt.getTargetIp(), bt.getTargetPort(), null);
                 log.info("Auto-resumed batch transfer: {}", bt.getBatchTransferId());
             }

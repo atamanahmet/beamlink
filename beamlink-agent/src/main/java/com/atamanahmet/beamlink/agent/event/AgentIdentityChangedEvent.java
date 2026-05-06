@@ -1,3 +1,9 @@
 package com.atamanahmet.beamlink.agent.event;
 
-public record AgentIdentityChangedEvent(Object source) {}
+import org.springframework.context.ApplicationEvent;
+
+public class AgentIdentityChangedEvent extends ApplicationEvent {
+    public AgentIdentityChangedEvent(Object source) {
+        super(source);
+    }
+}
