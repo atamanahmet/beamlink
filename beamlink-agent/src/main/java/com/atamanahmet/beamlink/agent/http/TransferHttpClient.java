@@ -2,6 +2,7 @@ package com.atamanahmet.beamlink.agent.http;
 
 import com.atamanahmet.beamlink.agent.dto.*;
 import com.atamanahmet.beamlink.agent.exception.FileTransferException;
+import com.atamanahmet.beamlink.agent.service.AgentService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class TransferHttpClient {
 
     private final HttpSender httpSender;
     private final ObjectMapper objectMapper;
+    private final AgentService agentService;
 
     public void registerTransfer(
             InitiateTransferRequest request,
@@ -39,6 +41,8 @@ public class TransferHttpClient {
                     "transferId", transferId.toString(),
                     "sourceAgentId", sourceAgentId.toString(),
                     "fileName", fileName,
+                    "sourceIp", agentService.getAgentIp(),
+                    "sourcePort", agentService.getAgentPort(),
                     "fileSize", fileSize
             ));
 
@@ -176,6 +180,28 @@ public class TransferHttpClient {
         } catch (Exception e) {
             throw new FileTransferException(
                     "Cannot reach target to query offset: " + url, e);
+        }
+    }
+
+    /**
+     * Tells peer to cancel their side of the transfer. Fire-and-forget, caller handles logging.
+     */
+    public void notifyCancelToPeer(String peerIp, int peerPort, UUID transferId) {
+        String url = "http://" + peerIp + ":" + peerPort + "/api/transfers/" + transferId + "/cancel-notify";
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("X-Public-Token",   agentService.getPublicToken())
+                    .header("X-Public-Id",      agentService.getPublicId().toString())
+                    .DELETE()
+                    .build();
+
+            HttpResponse<String> response = httpSender.send(request);
+            if (response.statusCode() != 200) {
+                throw new FileTransferException("Peer returned " + response.statusCode() + " on cancel notify", null);
+            }
+        } catch (Exception e) {
+            throw new FileTransferException("Cannot reach peer for cancel notify: " + url, e);
         }
     }
 }

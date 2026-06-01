@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.UUID;
 
 /**
  * Injects agent auth headers on every outbound request.
@@ -25,10 +26,18 @@ public class AgentAuthHttpSender implements HttpSender {
     public HttpResponse<String> send(HttpRequest request)
             throws IOException, InterruptedException {
 
+        UUID publicId = agentService.getPublicId();
+        String publicToken = agentService.getPublicToken();
+
+        if (publicId == null || publicToken == null) {
+            throw new IllegalStateException(
+                    "Agent not approved yet. publicId or publicToken is null.");
+        }
+
         HttpRequest authenticated = HttpRequest
                 .newBuilder(request, (k, v) -> true)
-                .header("X-Public-Token", agentService.getPublicToken())
-                .header("X-Public-Id", agentService.getPublicId().toString())
+                .header("X-Public-Token", publicToken)
+                .header("X-Public-Id", publicId.toString())
                 .build();
 
         return delegate.send(authenticated);
