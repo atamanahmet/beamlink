@@ -11,11 +11,11 @@ import java.net.http.HttpResponse;
  * Delegates to the JDK HttpClient
  */
 @Component
-public class HttpSenderImpl implements HttpSender {
+public class DefaultHttpSender implements HttpSender {
 
     private final HttpClient httpClient;
 
-    public HttpSenderImpl(HttpClient httpClient) {
+    public DefaultHttpSender(HttpClient httpClient) {
         this.httpClient = httpClient;
     }
 
