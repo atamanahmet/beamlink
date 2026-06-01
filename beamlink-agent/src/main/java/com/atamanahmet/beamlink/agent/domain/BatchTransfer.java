@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -17,19 +18,26 @@ import java.util.UUID;
 public class BatchTransfer {
 
     @Id
-    @Column(nullable = false, updatable = false, columnDefinition = "VARCHAR(36)")
+    @Column(nullable = false, updatable = false)
+    @JdbcTypeCode(12)
     private UUID batchTransferId;
 
-    @Column(nullable = false, columnDefinition = "VARCHAR(36)")
+    @Column
+    @JdbcTypeCode(12)
+    private UUID dispatchId;
+
+    @Column(nullable = false)
+    @JdbcTypeCode(12)
     private UUID sourceAgentId;
 
-    @Column(columnDefinition = "VARCHAR(36)")
+    @Column
+    @JdbcTypeCode(12)
     private UUID targetAgentId;
 
-    @Column()
+    @Column
     private String targetIp;
 
-    @Column()
+    @Column
     private int targetPort;
 
     @Column(nullable = false)
@@ -53,6 +61,7 @@ public class BatchTransfer {
 
     public static BatchTransfer initiate(
             UUID batchTransferId,
+            UUID dispatchId,
             UUID sourceAgentId,
             UUID targetAgentId,
             String targetIp,
@@ -62,6 +71,7 @@ public class BatchTransfer {
     ) {
         BatchTransfer bt = new BatchTransfer();
         bt.batchTransferId = batchTransferId;
+        bt.dispatchId = dispatchId;
         bt.sourceAgentId = sourceAgentId;
         bt.targetAgentId = targetAgentId;
         bt.targetIp = targetIp;

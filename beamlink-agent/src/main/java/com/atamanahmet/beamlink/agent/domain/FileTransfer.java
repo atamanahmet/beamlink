@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -17,45 +18,54 @@ import java.util.UUID;
 public class FileTransfer {
 
     @Id
-    @Column(nullable = false, updatable = false, columnDefinition = "VARCHAR(36)")
+    @Column(nullable = false, updatable = false)
+    @JdbcTypeCode(12)
     private UUID transferId;
 
-    @Column(columnDefinition = "VARCHAR(36)")
+    @Column()
+    @JdbcTypeCode(12)
     private UUID directoryTransferId;
 
-    @Column(columnDefinition = "VARCHAR(36)")
+    @Column()
+    @JdbcTypeCode(12)
     private UUID batchTransferId;
 
-    @Column(nullable = false, columnDefinition = "VARCHAR(36)")
+    @Column(nullable = false)
+    @JdbcTypeCode(12)
     private UUID sourceAgentId;
 
-    @Column(columnDefinition = "VARCHAR(36)")
+    @Column
+    @JdbcTypeCode(12)
     private UUID targetAgentId;
+
+    @Column
+    private String sourceIp;
+
+    @Column
+    private Integer sourcePort;
 
     @Column
     private String targetIp;
 
     @Column
-    private int targetPort;
+    private Integer targetPort;
 
     @Column(nullable = false)
     private String fileName;
 
-    private String filePath;        // full path on source agent disk
+    private String filePath;
 
     @Column(nullable = false)
     private long fileSize;
 
-    /* relative path from directory root, only set for directory transfer children */
     @Column
     private String relativePath;
 
-    /* root folder name from source, used to reconstruct directory structure on receiver */
     @Column
     private String directoryName;
 
     @Column(nullable = false)
-    private long confirmedOffset;   // bytes written to disk on target
+    private long confirmedOffset;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -68,16 +78,19 @@ public class FileTransfer {
     private int maxRetries;
 
     @Column(nullable = false)
+    private long activeTransferMs;
+
+    @Column(nullable = false)
     private Instant createdAt;
 
     @Column
-    private Instant lastChunkAt;    // last time a chunk was received
+    private Instant lastChunkAt;
 
     @Column
-    private Instant expiresAt;      // when EXPIRED status triggers
+    private Instant expiresAt;
 
     @Column
-    private String failureReason;   // last error, for UI and logs
+    private String failureReason;
 
     public static FileTransfer initiate(
             UUID transferId,

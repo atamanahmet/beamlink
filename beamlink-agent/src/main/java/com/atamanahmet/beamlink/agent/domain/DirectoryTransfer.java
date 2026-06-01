@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
 
 import java.time.Instant;
 import java.util.List;
@@ -18,26 +19,31 @@ import java.util.UUID;
 public class DirectoryTransfer {
 
     @Id
-    @Column(nullable = false, updatable = false, columnDefinition = "VARCHAR(36)")
+    @Column(nullable = false, updatable = false)
+    @JdbcTypeCode(12)
     private UUID directoryTransferId;
 
-    @Column(nullable = false, columnDefinition = "VARCHAR(36)")
+    @Column
+    @JdbcTypeCode(12)
+    private UUID dispatchId;
+
+    @Column(nullable = false)
+    @JdbcTypeCode(12)
     private UUID sourceAgentId;
 
-    @Column(columnDefinition = "VARCHAR(36)")
+    @Column
+    @JdbcTypeCode(12)
     private UUID targetAgentId;
 
-    @Column()
+    @Column
     private String targetIp;
 
-    @Column()
+    @Column
     private int targetPort;
 
-    /* root folder name, used to reconstruct structure on receiver */
     @Column(nullable = false)
     private String directoryName;
 
-    /* absolute path on source disk, null on receiver side */
     @Column
     private String sourcePath;
 
@@ -51,11 +57,12 @@ public class DirectoryTransfer {
     @Column(nullable = false)
     private GroupTransferStatus status;
 
-    /* empty dirs that need to exist before any files arrive */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
             name = "directory_transfer_empty_dirs",
-            joinColumns = @JoinColumn(name = "directory_transfer_id")
+            joinColumns = {@JoinColumn(
+                name = "directory_transfer_id"
+            )}
     )
     @Column(name = "dir_path")
     private List<String> emptyDirectories;
@@ -70,19 +77,20 @@ public class DirectoryTransfer {
     private String failureReason;
 
     public static DirectoryTransfer initiate(
-            UUID directoryTransferId,
-            UUID sourceAgentId,
-            UUID targetAgentId,
-            String targetIp,
-            int targetPort,
-            String directoryName,
-            String sourcePath,
-            int totalFiles,
-            long totalSize,
-            List<String> emptyDirectories
-    ) {
+        UUID directoryTransferId, 
+        UUID dispatchId, 
+        UUID sourceAgentId, 
+        UUID targetAgentId, 
+        String targetIp, 
+        int targetPort, 
+        String directoryName, 
+        String sourcePath, 
+        int totalFiles, 
+        long totalSize, 
+        List<String> emptyDirectories) {
         DirectoryTransfer dt = new DirectoryTransfer();
         dt.directoryTransferId = directoryTransferId;
+        dt.dispatchId = dispatchId;
         dt.sourceAgentId = sourceAgentId;
         dt.targetAgentId = targetAgentId;
         dt.targetIp = targetIp;
