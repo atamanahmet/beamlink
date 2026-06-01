@@ -12,8 +12,8 @@ import java.util.UUID;
 public class InitiateDirectoryTransferRequest {
 
     private String sourcePath;
+    private UUID dispatchId;
     private UUID targetAgentId;
     private String targetIp;
     private int targetPort;
-    private String targetToken;
 }

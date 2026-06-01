@@ -13,8 +13,8 @@ import java.util.UUID;
 public class InitiateBatchTransferRequest {
 
     private List<String> filePaths;
+    private UUID dispatchId;
     private UUID targetAgentId;
     private String targetIp;
     private int targetPort;
-    private String targetToken;
 }

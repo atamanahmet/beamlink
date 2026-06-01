@@ -13,6 +13,7 @@ import java.util.UUID;
 public class ReceiveBatchRequest {
 
     private UUID batchTransferId;
+    private UUID dispatchId;
     private UUID sourceAgentId;
     private int totalFiles;
     private long totalSize;

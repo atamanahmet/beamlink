@@ -13,6 +13,7 @@ import java.util.UUID;
 public class ReceiveDirectoryRequest {
 
     private UUID directoryTransferId;
+    private UUID dispatchId;
     private UUID sourceAgentId;
     private String directoryName;
     private int totalFiles;
