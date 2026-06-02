@@ -18,4 +18,6 @@ public class AgentIdentityResponse {
     private AgentState state;
     private String authToken;
     private String publicToken;
+    private UUID publicId;
+    private String nexusPublicKey;
 }

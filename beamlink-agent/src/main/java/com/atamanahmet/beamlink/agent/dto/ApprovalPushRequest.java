@@ -14,6 +14,8 @@ public class ApprovalPushRequest {
     private UUID agentId;
     private String authToken;
     private String publicToken;
-    private String approvedName; // optional, if rename happens
+    private UUID publicId;
+    private String approvedName;
     private AgentState state;
+    private String nexusPublicKey;
 }

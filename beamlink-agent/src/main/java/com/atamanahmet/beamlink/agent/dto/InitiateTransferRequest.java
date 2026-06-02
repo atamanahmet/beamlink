@@ -14,5 +14,4 @@ public class InitiateTransferRequest {
     private UUID targetAgentId;
     private String targetIp;
     private int targetPort;
-    private String targetToken;     // auth token for target agent
 }

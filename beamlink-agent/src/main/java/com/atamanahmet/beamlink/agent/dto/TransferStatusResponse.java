@@ -15,8 +15,8 @@ public class TransferStatusResponse {
     private long confirmedOffset;
     private long fileSize;
     private String fileName;
-    private String failureReason;   // null unless FAILED
-    private UUID targetAgentId;      // to match peer online/offline
-    private Instant createdAt;       // for elapsed time
-    private Instant lastChunkAt;     // for speed calculation
+    private String failureReason;
+    private UUID targetAgentId;
+    private Instant createdAt;
+    private Instant lastChunkAt;
 }
