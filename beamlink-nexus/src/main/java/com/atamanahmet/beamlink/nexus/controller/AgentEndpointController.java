@@ -11,7 +11,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/nexus/agent")
 @RequiredArgsConstructor
-public class NexusAgentEndpointController {
+public class AgentEndpointController {
 
     private final AgentService agentService;
 

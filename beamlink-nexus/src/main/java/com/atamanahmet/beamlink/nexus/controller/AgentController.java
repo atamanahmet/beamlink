@@ -4,7 +4,6 @@ import com.atamanahmet.beamlink.nexus.domain.enums.AgentState;
 import com.atamanahmet.beamlink.nexus.dto.AgentIdentityResponse;
 import com.atamanahmet.beamlink.nexus.dto.AgentRegistrationRequest;
 import com.atamanahmet.beamlink.nexus.dto.AgentRegistrationResponse;
-import com.atamanahmet.beamlink.nexus.dto.AgentRenameRequest;
 import com.atamanahmet.beamlink.nexus.dto.AgentStatusRequest;
 import com.atamanahmet.beamlink.nexus.dto.AgentStatusResponse;
 import com.atamanahmet.beamlink.nexus.security.AgentTokenService;
@@ -32,7 +31,7 @@ public class AgentController {
          */
         @PostMapping("/register")
         public ResponseEntity<AgentRegistrationResponse> register(
-                @RequestBody AgentRegistrationRequest request) {
+                        @RequestBody AgentRegistrationRequest request) {
 
                 log.info("Agent register request: {}:{}", request.getIpAddress(), request.getPort());
 
@@ -46,7 +45,7 @@ public class AgentController {
          */
         @PostMapping("/status")
         public ResponseEntity<AgentStatusResponse> updateStatus(
-                @RequestBody AgentStatusRequest request) {
+                        @RequestBody AgentStatusRequest request) {
 
                 return ResponseEntity.ok(agentService.updateAgentStatus(request));
         }
@@ -72,22 +71,27 @@ public class AgentController {
          */
         @GetMapping("/identify")
         public ResponseEntity<AgentIdentityResponse> identify(
-                @RequestParam String ipAddress,
-                @RequestParam int port) {
+                        @RequestParam String ipAddress,
+                        @RequestParam int port) {
 
                 return agentService.getByIpAddressAndPort(ipAddress, port)
-                        .map(agent -> ResponseEntity.ok(AgentIdentityResponse.builder()
-                                .agentId(agent.getId())
-                                .agentName(agent.getName())
-                                .state(agent.getState())
-                                .authToken(agent.getState() == AgentState.APPROVED
-                                        ? agentTokenService.generateAuthToken(agent.getId())
-                                                : null)
-                                .publicToken(
-                                        agent.getState() == AgentState.APPROVED
-                                                && agent.getPublicId() != null
-                                        ? agentTokenService.generatePublicToken(agent.getId(), agent.getPublicId()) : null)
-                                .build()))
-                        .orElse(ResponseEntity.notFound().build());
+                                .map(agent -> ResponseEntity.ok(AgentIdentityResponse.builder()
+                                                .agentId(agent.getId())
+                                                .agentName(agent.getName())
+                                                .state(agent.getState())
+                                                .authToken(agent.getState() == AgentState.APPROVED
+                                                                ? agentTokenService.generateAuthToken(agent.getId())
+                                                                : null)
+                                                .publicToken(
+                                                                agent.getState() == AgentState.APPROVED
+                                                                                && agent.getPublicId() != null
+                                                                                                ? agentTokenService
+                                                                                                                .generatePublicToken(
+                                                                                                                                agent.getId(),
+                                                                                                                                agent.getPublicId())
+                                                                                                : null)
+                                                .publicId(agent.getPublicId())
+                                                .build()))
+                                .orElse(ResponseEntity.notFound().build());
         }
 }
