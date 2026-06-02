@@ -34,7 +34,7 @@ public class TransferSenderService {
     private final FileTransferRepository transferRepository;
     private final NexusConfig nexusConfig;
     private final ObjectMapper objectMapper;
-    private final TransferAsyncSender asyncSender;
+    private final TransferSender asyncSender;
     private final TransferHttpClient transferHttpClient;
     private final AgentTokenService agentTokenService;
     private final NexusService nexusService;

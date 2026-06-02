@@ -9,8 +9,6 @@ import com.atamanahmet.beamlink.agent.exception.FileTransferException;
 import lombok.RequiredArgsConstructor;
 
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import org.springframework.stereotype.Service;
 
@@ -30,8 +28,9 @@ public class TransferDispatchService {
     private final TransferSenderService transferSenderService;
     private final BatchSenderService batchSenderService;
     private final DirectorySenderService directorySenderService;
-    private final TransferAsyncSender asyncSender;
+    private final TransferSender asyncSender;
 
+    /** One dispatchId groups all transfers from this single send action */
     public List<DispatchResultItem> dispatch(InitiateSendRequest request) {
         if (request.getPaths() == null || request.getPaths().isEmpty()) {
             throw new FileTransferException("No paths provided", null);
@@ -39,13 +38,13 @@ public class TransferDispatchService {
 
         List<String> filePaths = new ArrayList<>();
         List<String> directoryPaths = new ArrayList<>();
-
         classifyPaths(request.getPaths(), filePaths, directoryPaths);
 
-        List<DispatchResultItem> results = new ArrayList<>();
+        UUID dispatchId = UUID.randomUUID();
 
-        dispatchFiles(request, filePaths, results);
-        dispatchDirectories(request, directoryPaths, results);
+        List<DispatchResultItem> results = new ArrayList<>();
+        dispatchFiles(request, filePaths, results, dispatchId);
+        dispatchDirectories(request, directoryPaths, results, dispatchId);
 
         log.info("Dispatch complete: {} transfer(s) initiated", results.size());
         return results;
@@ -70,10 +69,14 @@ public class TransferDispatchService {
         }
     }
 
-    /** Single file: SINGLE, multiple files: BATCH. */
+    /**
+     * Single file: SINGLE, multiple files: BATCH.
+     * single transfer don't need dispatchId
+     */
     private void dispatchFiles(InitiateSendRequest request,
                                List<String> filePaths,
-                               List<DispatchResultItem> results) {
+                               List<DispatchResultItem> results,
+                               UUID dispatchId) {
         if (filePaths.isEmpty()) return;
 
         if (filePaths.size() == 1) {
@@ -85,8 +88,7 @@ public class TransferDispatchService {
 
             UUID id = transferSenderService.initiate(req).getTransferId();
             asyncSender.sendAsync(id, request.getTargetIp(), request.getTargetPort());
-            results.add(new DispatchResultItem(id, TransferType.SINGLE));
-            log.info("Dispatched single file transfer: {}", id);
+            results.add(new DispatchResultItem(id, TransferType.SINGLE, dispatchId));
 
         } else {
             InitiateBatchTransferRequest req = new InitiateBatchTransferRequest();
@@ -94,26 +96,28 @@ public class TransferDispatchService {
             req.setTargetAgentId(request.getTargetAgentId());
             req.setTargetIp(request.getTargetIp());
             req.setTargetPort(request.getTargetPort());
+            req.setDispatchId(dispatchId);
 
             UUID id = batchSenderService.initiate(req).getBatchTransferId();
-            results.add(new DispatchResultItem(id, TransferType.BATCH));
-            log.info("Dispatched batch transfer: {} files → {}", filePaths.size(), id);
+            results.add(new DispatchResultItem(id, TransferType.BATCH, dispatchId));
         }
     }
 
     /** One dispatch per directory. */
     private void dispatchDirectories(InitiateSendRequest request,
                                      List<String> directoryPaths,
-                                     List<DispatchResultItem> results) {
+                                     List<DispatchResultItem> results,
+                                     UUID dispatchId) {
         for (String dirPath : directoryPaths) {
             InitiateDirectoryTransferRequest req = new InitiateDirectoryTransferRequest();
             req.setSourcePath(dirPath);
             req.setTargetAgentId(request.getTargetAgentId());
             req.setTargetIp(request.getTargetIp());
             req.setTargetPort(request.getTargetPort());
+            req.setDispatchId(dispatchId);
 
             UUID id = directorySenderService.initiate(req).getDirectoryTransferId();
-            results.add(new DispatchResultItem(id, TransferType.DIRECTORY));
+            results.add(new DispatchResultItem(id, TransferType.DIRECTORY, dispatchId));
             log.info("Dispatched directory transfer: {} → {}", dirPath, id);
         }
     }

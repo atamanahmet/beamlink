@@ -5,8 +5,6 @@ import com.atamanahmet.beamlink.nexus.dto.*;
 import com.atamanahmet.beamlink.nexus.exception.FileTransferException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Files;
@@ -16,15 +14,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-@Service
 @Slf4j
+@Service
 @RequiredArgsConstructor
 public class TransferDispatchService {
 
     private final TransferSenderService transferSenderService;
     private final BatchSenderService batchSenderService;
     private final DirectorySenderService directorySenderService;
-    private final TransferAsyncSender asyncSender;
+    private final TransferSender asyncSender;
 
     /** One dispatchId groups all transfers from this single send action */
     public List<DispatchResultItem> dispatch(InitiateSendRequest request) {

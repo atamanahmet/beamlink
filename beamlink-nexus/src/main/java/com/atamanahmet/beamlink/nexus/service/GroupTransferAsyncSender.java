@@ -5,8 +5,6 @@ import com.atamanahmet.beamlink.nexus.domain.enums.GroupTransferStatus;
 import com.atamanahmet.beamlink.nexus.domain.enums.TransferStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -18,7 +16,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class GroupTransferAsyncSender {
 
-    private final TransferAsyncSender transferAsyncSender;
+    private final TransferSender transferSender;
 
     /**
      * Sequential send loop for any group transfer type.
@@ -49,7 +47,7 @@ public class GroupTransferAsyncSender {
             }
 
             try {
-                transferAsyncSender.sendBlocking(
+                transferSender.sendBlocking(
                         ft.getTransferId(), ctx.targetIp(), ctx.targetPort());
             } catch (RuntimeException e) {
                 log.error("File failed in group {}: {}", groupId, ft.getFileName(), e);
